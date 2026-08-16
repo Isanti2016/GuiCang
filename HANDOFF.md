@@ -36,7 +36,7 @@
 - NAS系统详细设计.md：模块、数据表、API 设计
 - GuiCang技术方案与实施手册.md：技术选型、部署视图、33 步实施步骤（核心执行依据）
 - AI规则与编码规范.md：AI 与前后端编码规范
-- 根目录 AGENTS.md：AI 硬约束（必读）
+- 根目录 AGENTS.md：AI 硬约束（必读，与 docs/AI规则与编码规范.md 同为本项目绑定规范）
 
 ## 下一步（按手册逐 Step 执行，每步验证后中文提交）
 - Step 0.4：前端工程初始化（pnpm create vite + Element Plus/Pinia/Router/Axios/ECharts/markdown-it/highlight.js/@vueuse/core + ESLint/Prettier）。

@@ -15,7 +15,7 @@
 - docs/AI规则与编码规范.md：AI 与编码规范
 
 ## 开发约束
-所有编码遵循 AGENTS.md 与 docs/AI规则与编码规范.md；提交信息用中文 Conventional Commits。
+所有编码**强制**遵循根目录 AGENTS.md 与 docs/AI规则与编码规范.md（两份均为绑定约束，任何偏离须先说明并获批）；提交信息用中文 Conventional Commits。
 
 ## 交接
 新对话开始工作前请先阅读 HANDOFF.md。
