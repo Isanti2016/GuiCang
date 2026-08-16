@@ -590,7 +590,10 @@ GUICANG_ADMIN_INITIAL=<首次向导填写>
 ## 9. 风险与备注
 
 - helper 是安全关键件：参数白名单 + stdin 传密 + 自身日志，先做单测。
-- pdbedit 当前报错，Step 2.1 先修复再依赖。
+- pdbedit 当前报错，Step 2.1 先修复再依赖。（2026-08 复查：本机 pdbedit -L 已正常）
 - SQLite→PostgreSQL 切换必须在 Step 3 前用 Flyway 兼容写法验证一次。
 - Redis 若在意许可，直接换 Valkey（同协议兼容），compose 里改镜像即可。
+- 【实施记录 2026-08】Flyway 10 社区版不再在 Maven Central 提供 SQLite 模块，pom 锁定 flyway 9.22.3（内置 SQLite 支持）；迁移脚本用 `${db-id-type}` placeholder 区分 SQLite/PG 主键。
+- 【实施记录 2026-08】特权脚本统一命名 guicang-helper（早期《详细设计》中的 nas-user-helper 已更名对齐）；宿主机安装由 scripts/install-helper.sh 幂等执行（需 root，安装前先备份）。
+
 

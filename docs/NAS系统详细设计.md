@@ -64,7 +64,7 @@
     └──────────► Filebeat → Elasticsearch → Kibana（日志链路）
 
 宿主机特权边界（sudo 白名单，非 root 后端）：
-    backend ──sudo──► /usr/local/bin/nas-user-helper
+    backend ──sudo──► /usr/local/bin/guicang-helper
                         ├─ verify（PAM 校验登录）
                         ├─ user-add / user-del / user-mod / passwd
                         ├─ samba-sync（同步 Samba tdbsam）
@@ -80,7 +80,7 @@
 |---|---|---|
 | frontend | Vue3 SPA，页面与交互 | Nginx 托管静态文件 |
 | backend | REST API、业务逻辑、鉴权、审计、同步调度、监控聚合 | Docker 容器（nasapp 用户） |
-| nas-user-helper | 特权操作：PAM 校验、系统用户管理、Samba 同步、主机指标 | 宿主机脚本，sudo 白名单 |
+| guicang-helper | 特权操作：PAM 校验、系统用户管理、Samba 同步、主机指标 | 宿主机脚本，sudo 白名单 |
 | Redis | 会话/权限缓存、登录限流、同步队列 | Docker 容器 |
 | SQLite | 业务数据（用户 profile、RBAC、文件索引、审计、配置） | 卷挂载文件 |
 | Elasticsearch + Kibana | 日志检索与可视化 | Docker 容器 |
@@ -89,7 +89,7 @@
 
 ### 2.3 关键数据流
 
-- 登录：前端 → Nginx → backend → nas-user-helper verify(PAM) → 查 RBAC → 发 JWT → 记审计。
+- 登录：前端 → Nginx → backend → guicang-helper verify(PAM) → 查 RBAC → 发 JWT → 记审计。
 - 文件浏览：前端 → backend 查目录（filesystem）→ 返回列表；下载/预览走 HTTP Range 流。
 - 文件写入：前端 multipart 上传 → backend 校验权限与大小 → 流式写盘 → 更新 file_index → 审计。
 - 监控：backend 定时调用 helper metrics → 缓存最近 N 条 → 大屏轮询。
@@ -114,15 +114,15 @@
 ### 3.2 登录认证流程（PAM）
 
 1. 前端 POST /api/v1/auth/login（username + password）。
-2. backend 调用 helper：echo 密码经 stdin 传给 nas-user-helper verify username（密码不进 argv、不进日志）。
+2. backend 调用 helper：echo 密码经 stdin 传给 guicang-helper verify username（密码不进 argv、不进日志）。
 3. helper 用 PAM 校验系统密码，输出 JSON：ok / uid / gid / home / shell。
 4. backend 查 sys_user 表：账号是否存在、是否启用、角色权限。
 5. 成功签发 JWT（HS256，含 username、uid、角色）；失败统一提示并记审计。
 
-### 3.3 nas-user-helper 设计
+### 3.3 guicang-helper 设计
 
-位置与权限：/usr/local/bin/nas-user-helper，root:root，mode 750，组 nasops。
-sudoers 白名单：%nasops ALL=(root) NOPASSWD:/usr/local/bin/nas-user-helper
+位置与权限：/usr/local/bin/guicang-helper，root:root，mode 750，组 nasops。
+sudoers 白名单：%nasops ALL=(root) NOPASSWD:/usr/local/bin/guicang-helper
 
 子命令：
 ```text
@@ -485,7 +485,7 @@ volumes:
   nas-config:  # 本地配置（application-local.yml 等）
 bind mount:
   /home/wb/nas -> backend:/nas（rw，组权限）
-  /usr/local/bin/nas-user-helper + /etc/sudoers.d/nasops -> backend（helper 调用）
+  /usr/local/bin/guicang-helper + /etc/sudoers.d/nasops -> backend（helper 调用）
 ```
 
 ### 7.3 Nginx 要点
