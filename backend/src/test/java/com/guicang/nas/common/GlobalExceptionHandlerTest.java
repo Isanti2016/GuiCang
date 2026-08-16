@@ -6,14 +6,33 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.guicang.nas.config.SecurityConfig;
+import com.guicang.nas.module.auth.JwtAuthenticationFilter;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.autoconfigure.security.servlet.SecurityAutoConfiguration;
+import org.springframework.boot.autoconfigure.security.servlet.SecurityFilterAutoConfiguration;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import org.springframework.context.annotation.ComponentScan;
+import org.springframework.context.annotation.FilterType;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 
-/** 全局异常处理行为测试：所有异常统一返回 {@link Result} 结构。 */
-@WebMvcTest(controllers = TestExceptionController.class)
+/**
+ * 全局异常处理行为测试：所有异常统一返回 {@link Result} 结构。
+ *
+ * <p>本切片只测异常处理，排除 Security 相关组件（其依赖不属于 WebMvc 切片）。
+ */
+@WebMvcTest(
+    controllers = TestExceptionController.class,
+    excludeAutoConfiguration = {
+      SecurityAutoConfiguration.class,
+      SecurityFilterAutoConfiguration.class
+    },
+    excludeFilters =
+        @ComponentScan.Filter(
+            type = FilterType.ASSIGNABLE_TYPE,
+            classes = {SecurityConfig.class, JwtAuthenticationFilter.class}))
 class GlobalExceptionHandlerTest {
 
   @Autowired private MockMvc mockMvc;

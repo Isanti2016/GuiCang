@@ -1,0 +1,116 @@
+package com.guicang.nas.module.auth;
+
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.guicang.nas.common.ResultCodes;
+import com.guicang.nas.infra.account.PAMVerifier;
+import com.guicang.nas.infra.account.PAMVerifyResult;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.http.MediaType;
+import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.web.servlet.MockMvc;
+
+/** 认证链路测试：登录（PAM mock）、令牌访问、未认证/非法令牌拒绝。 */
+@SpringBootTest
+@AutoConfigureMockMvc
+@ActiveProfiles("test")
+class AuthFlowTest {
+
+  @Autowired private MockMvc mockMvc;
+
+  @Autowired private ObjectMapper objectMapper;
+
+  @MockBean private PAMVerifier pamVerifier;
+
+  @Test
+  void 登录成功返回令牌与用户信息() throws Exception {
+    when(pamVerifier.verify("alice", "secret-pass"))
+        .thenReturn(PAMVerifyResult.success(1005, 2000, "/home/alice", "/usr/sbin/nologin"));
+
+    mockMvc
+        .perform(
+            post("/api/v1/auth/login")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"username\":\"alice\",\"password\":\"secret-pass\"}"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.code").value(ResultCodes.SUCCESS))
+        .andExpect(jsonPath("$.data.token").isNotEmpty())
+        .andExpect(jsonPath("$.data.user.username").value("alice"))
+        .andExpect(jsonPath("$.data.user.uid").value(1005));
+  }
+
+  @Test
+  void 密码错误返回401统一码() throws Exception {
+    when(pamVerifier.verify(anyString(), anyString()))
+        .thenReturn(PAMVerifyResult.failure("用户名或密码错误"));
+
+    mockMvc
+        .perform(
+            post("/api/v1/auth/login")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"username\":\"alice\",\"password\":\"wrong\"}"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.code").value(ResultCodes.UNAUTHORIZED))
+        .andExpect(jsonPath("$.message").value("用户名或密码错误"));
+  }
+
+  @Test
+  void 未带令牌访问受保护接口返回401() throws Exception {
+    mockMvc
+        .perform(get("/api/v1/auth/me"))
+        .andExpect(status().isUnauthorized())
+        .andExpect(jsonPath("$.code").value(ResultCodes.UNAUTHORIZED));
+  }
+
+  @Test
+  void 带令牌访问me返回用户信息() throws Exception {
+    when(pamVerifier.verify("alice", "secret-pass"))
+        .thenReturn(PAMVerifyResult.success(1005, 2000, "/home/alice", "/usr/sbin/nologin"));
+
+    String body =
+        mockMvc
+            .perform(
+                post("/api/v1/auth/login")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("{\"username\":\"alice\",\"password\":\"secret-pass\"}"))
+            .andReturn()
+            .getResponse()
+            .getContentAsString();
+    String token = objectMapper.readTree(body).path("data").path("token").asText();
+
+    mockMvc
+        .perform(get("/api/v1/auth/me").header("Authorization", "Bearer " + token))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.data.username").value("alice"))
+        .andExpect(jsonPath("$.data.uid").value(1005));
+  }
+
+  @Test
+  void 非法令牌返回401() throws Exception {
+    mockMvc
+        .perform(get("/api/v1/auth/me").header("Authorization", "Bearer bad.token.value"))
+        .andExpect(status().isUnauthorized())
+        .andExpect(jsonPath("$.code").value(ResultCodes.UNAUTHORIZED));
+  }
+
+  @Test
+  void 登录参数校验失败返回400() throws Exception {
+    mockMvc
+        .perform(
+            post("/api/v1/auth/login")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"username\":\"\",\"password\":\"\"}"))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.code").value(ResultCodes.BAD_REQUEST));
+  }
+}
