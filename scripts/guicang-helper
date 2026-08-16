@@ -1,0 +1,360 @@
+#!/usr/bin/env bash
+# =============================================================================
+# guicang-helper — GuiCang 特权账号管理脚本（宿主机 root 专属，经 sudo 白名单调用）
+#
+# 安全要点（绑定规范，最高优先级）：
+#   1. 密码只经 stdin 传入（verify/passwd/samba-sync/user-add），
+#      绝不出现于 argv、环境变量或日志；
+#   2. 所有子命令先做参数白名单校验（用户名严格正则）；
+#   3. 输出统一 JSON（{"ok":true|false, ...}），供后端解析；
+#   4. 自身写审计日志 /var/log/guicang-helper.log，日志内容脱敏（不落密码）。
+#
+# 安装位置：/usr/local/bin/guicang-helper（root:nasops 750）
+# sudoers 白名单：%nasops ALL=(root) NOPASSWD:/usr/local/bin/guicang-helper
+#
+# 子命令：
+#   verify <user>                 # stdin 读密码，PAM 校验，输出 uid/gid/home/shell
+#   user-add <user> [--display NAME]  # 建系统账号 + 设密码 + Samba；密码走 stdin
+#   user-del <user> [--remove-home]   # 删系统账号 + Samba 账号
+#   user-mod <user> [--lock|--unlock] [--shell SHELL]  # 启用/禁用/改 shell
+#   passwd  <user>                # 同时改 Linux + Samba 密码；新密码走 stdin
+#   samba-sync <user>             # 仅同步 Samba 密码；密码走 stdin
+#   metrics                       # 主机指标 JSON（cpu/load/mem/disk/net/uptime）
+#   health                        # 自检：PAM/系统账号/Samba/存储根
+# =============================================================================
+set -uo pipefail
+
+LOG_FILE="${GUICANG_HELPER_LOG:-/var/log/guicang-helper.log}"
+PAM_VERIFY="${GUICANG_PAM_VERIFY:-/usr/local/libexec/guicang/guicang-pam-verify.py}"
+USERNAME_RE='^[a-z_][a-z0-9_-]{0,31}$'
+STORAGE_ROOT="${GUICANG_STORAGE_ROOT:-/home/wb/nas}"
+
+# ---------------------------------------------------------------------------
+# 基础工具
+# ---------------------------------------------------------------------------
+log() {
+  local ts
+  ts="$(date '+%Y-%m-%d %H:%M:%S')"
+  # 日志写入失败（如无权限）只告警到 stderr，不阻断调用
+  if ! printf '%s %s %s\n' "$ts" "$(id -un)" "$1" >>"$LOG_FILE" 2>/dev/null; then
+    printf 'warning: 无法写入日志 %s\n' "$LOG_FILE" >&2
+  fi
+}
+
+fail() {
+  printf '{"ok":false,"error":"%s"}\n' "$1"
+  exit 1
+}
+
+ok_json() {
+  printf '{"ok":true%s}\n' "$1"
+  exit 0
+}
+
+# 必须是 root（sudoers 白名单保证调用方为 %nasops）
+require_root() {
+  if [ "$(id -u)" -ne 0 ]; then
+    fail "必须以 root 运行（经 sudo 白名单）"
+  fi
+}
+
+verify_username() {
+  local user="$1"
+  if ! [[ "$user" =~ $USERNAME_RE ]]; then
+    fail "用户名不合法（须为小写字母/数字/下划线/连字符，且以字母或下划线开头，最长 32 位）"
+  fi
+  if [ "${#user}" -gt 32 ]; then
+    fail "用户名过长（最长 32 位）"
+  fi
+}
+
+read_password_stdin() {
+  # 一次性读取全部 stdin 作为密码（不落日志、不出现在 argv）
+  cat
+}
+
+json_escape() {
+  # 简易 JSON 转义（\ " 控制字符），用于日志与 detail 字段
+  printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g' | tr -d '\000-\037'
+}
+
+# ---------------------------------------------------------------------------
+# verify：PAM 密码校验（密码经 stdin）
+# ---------------------------------------------------------------------------
+cmd_verify() {
+  [ $# -eq 1 ] || fail "用法: verify <username>"
+  verify_username "$1"
+  local user="$1"
+  if [ ! -x "$PAM_VERIFY" ]; then
+    fail "PAM 校验器不存在: $PAM_VERIFY（请先运行 install-helper.sh）"
+  fi
+  local password
+  password="$(read_password_stdin)"
+  local output
+  output="$(printf '%s\n' "$password" | "$PAM_VERIFY" "$user" 2>/dev/null)" || true
+  if [ -z "$output" ]; then
+    log "verify 失败: user=$user（PAM 校验器无输出）"
+    fail "PAM 校验失败"
+  fi
+  log "verify: user=$user result=$(printf '%s' "$output" | grep -o '"ok":[a-z]*')"
+  printf '%s\n' "$output"
+  exit 0
+}
+
+# ---------------------------------------------------------------------------
+# user-add：useradd + chpasswd + smbpasswd（密码经 stdin）
+# ---------------------------------------------------------------------------
+cmd_user_add() {
+  [ $# -ge 1 ] || fail "用法: user-add <username> [--display NAME]"
+  verify_username "$1"
+  local user="$1"
+  shift
+  local display=""
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --display)
+        [ $# -ge 2 ] || fail "--display 需要参数"
+        display="$2"
+        shift 2
+        ;;
+      *) fail "未知参数: $1" ;;
+    esac
+  done
+
+  getent passwd "$user" >/dev/null 2>&1 && fail "系统账号已存在: $user"
+  getent group nasusers >/dev/null 2>&1 || fail "组 nasusers 不存在（请先运行 install-helper.sh）"
+
+  local password
+  password="$(read_password_stdin)"
+  [ -n "$password" ] || fail "密码不能为空"
+
+  useradd -m -d "/home/$user" -s /usr/sbin/nologin -g nasusers -G nasusers \
+    ${display:+ -c "$display"} "$user" 2>/dev/null || fail "创建系统账号失败"
+  printf '%s:%s\n' "$user" "$password" | chpasswd 2>/dev/null || {
+    userdel "$user" 2>/dev/null
+    fail "设置密码失败（已回滚账号）"
+  }
+  if ! printf '%s\n%s\n' "$password" "$password" | smbpasswd -a -s "$user" >/dev/null 2>&1; then
+    log "user-add: Samba 密码同步失败 user=$user（不影响 Linux 账号）"
+  fi
+
+  local uid
+  uid="$(id -u "$user")"
+  log "user-add: user=$user uid=$uid"
+  ok_json ",\"user\":\"$user\",\"uid\":$uid"
+}
+
+# ---------------------------------------------------------------------------
+# user-del：userdel + smbpasswd -x（默认保留个人目录）
+# ---------------------------------------------------------------------------
+cmd_user_del() {
+  [ $# -ge 1 ] || fail "用法: user-del <username> [--remove-home]"
+  verify_username "$1"
+  local user="$1"
+  shift
+  local remove_home=0
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --remove-home) remove_home=1 ;;
+      *) fail "未知参数: $1" ;;
+    esac
+    shift
+  done
+
+  getent passwd "$user" >/dev/null 2>&1 || fail "系统账号不存在: $user"
+  if [ "$user" = "root" ] || [ "$user" = "guicang-svc" ] || [ "$user" = "wb" ] || [ "$user" = "app_data" ]; then
+    fail "受保护账号，禁止删除: $user"
+  fi
+
+  # 先删 Samba 账号（需要 Unix 账号存在，否则 smbpasswd -x 找不到用户），再删系统账号
+  smbpasswd -x "$user" >/dev/null 2>&1 || true
+  if [ "$remove_home" -eq 1 ]; then
+    userdel -r "$user" 2>/dev/null || fail "删除系统账号失败"
+  else
+    userdel "$user" 2>/dev/null || fail "删除系统账号失败"
+  fi
+  log "user-del: user=$user remove_home=$remove_home"
+  ok_json ",\"user\":\"$user\""
+}
+
+# ---------------------------------------------------------------------------
+# user-mod：锁/解锁/改 shell（Samba 禁用随锁定，解锁后由 samba-sync 重建）
+# ---------------------------------------------------------------------------
+cmd_user_mod() {
+  [ $# -ge 2 ] || fail "用法: user-mod <username> [--lock|--unlock] [--shell SHELL]"
+  verify_username "$1"
+  local user="$1"
+  shift
+  local lock=""
+  local unlock=""
+  local shell=""
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --lock) lock=1 ;;
+      --unlock) unlock=1 ;;
+      --shell)
+        [ $# -ge 2 ] || fail "--shell 需要参数"
+        shell="$2"
+        shift 2
+        ;;
+      *) fail "未知参数: $1" ;;
+    esac
+    shift
+  done
+
+  getent passwd "$user" >/dev/null 2>&1 || fail "系统账号不存在: $user"
+
+  if [ -n "$lock" ]; then
+    usermod -L "$user" 2>/dev/null || fail "锁定账号失败"
+    smbpasswd -d "$user" >/dev/null 2>&1 || true
+  fi
+  if [ -n "$unlock" ]; then
+    usermod -U "$user" 2>/dev/null || fail "解锁账号失败"
+  fi
+  if [ -n "$shell" ]; then
+    case "$shell" in
+      /usr/sbin/nologin|/bin/bash|/bin/sh|/usr/bin/bash)
+        usermod -s "$shell" "$user" 2>/dev/null || fail "修改 shell 失败"
+        ;;
+      *) fail "shell 不在白名单: $shell" ;;
+    esac
+  fi
+  log "user-mod: user=$user lock=${lock:-0} unlock=${unlock:-0} shell=${shell:-keep}"
+  ok_json ",\"user\":\"$user\""
+}
+
+# ---------------------------------------------------------------------------
+# passwd：同时改 Linux + Samba 密码（新密码经 stdin）
+# ---------------------------------------------------------------------------
+cmd_passwd() {
+  [ $# -eq 1 ] || fail "用法: passwd <username>"
+  verify_username "$1"
+  local user="$1"
+  getent passwd "$user" >/dev/null 2>&1 || fail "系统账号不存在: $user"
+
+  local password
+  password="$(read_password_stdin)"
+  [ -n "$password" ] || fail "密码不能为空"
+
+  printf '%s:%s\n' "$user" "$password" | chpasswd 2>/dev/null || fail "修改 Linux 密码失败"
+  if ! printf '%s\n%s\n' "$password" "$password" | smbpasswd -a -s "$user" >/dev/null 2>&1; then
+    log "passwd: Samba 密码同步失败 user=$user（Linux 密码已改）"
+  fi
+  log "passwd: user=$user"
+  ok_json ",\"user\":\"$user\""
+}
+
+# ---------------------------------------------------------------------------
+# samba-sync：仅同步 Samba 密码（密码经 stdin）
+# ---------------------------------------------------------------------------
+cmd_samba_sync() {
+  [ $# -eq 1 ] || fail "用法: samba-sync <username>"
+  verify_username "$1"
+  local user="$1"
+  getent passwd "$user" >/dev/null 2>&1 || fail "系统账号不存在: $user"
+
+  local password
+  password="$(read_password_stdin)"
+  [ -n "$password" ] || fail "密码不能为空"
+
+  printf '%s\n%s\n' "$password" "$password" | smbpasswd -a -s "$user" >/dev/null 2>&1 \
+    || fail "Samba 密码同步失败"
+  log "samba-sync: user=$user"
+  ok_json ",\"user\":\"$user\""
+}
+
+# ---------------------------------------------------------------------------
+# metrics：主机指标（只读）
+# ---------------------------------------------------------------------------
+cmd_metrics() {
+  local cpu load1 load5 load15 mem_total mem_avail swap_total swap_free disk_total disk_avail
+  local net_rx net_tx uptime_sec
+
+  read -r load1 load5 load15 _ < /proc/loadavg
+
+  mem_total="$(awk '/^MemTotal:/{print $2}' /proc/meminfo)"
+  mem_avail="$(awk '/^MemAvailable:/{print $2}' /proc/meminfo)"
+  swap_total="$(awk '/^SwapTotal:/{print $2}' /proc/meminfo)"
+  swap_free="$(awk '/^SwapFree:/{print $2}' /proc/meminfo)"
+
+  disk_total="$(df -k "$STORAGE_ROOT" 2>/dev/null | awk 'NR==2{print $2}')"
+  disk_avail="$(df -k "$STORAGE_ROOT" 2>/dev/null | awk 'NR==2{print $4}')"
+  [ -n "$disk_total" ] || disk_total=0
+  [ -n "$disk_avail" ] || disk_avail=0
+
+  # 1 秒 CPU 增量采样（同一次 /proc/stat 读取计算 idle 与 total）
+  local line idle1 idle2 total1 total2 cpu
+  line="$(head -1 /proc/stat)"
+  set -- $line
+  idle1=$5
+  total1=0
+  for v in "${@:2}"; do total1=$((total1 + v)); done
+  sleep 1
+  line="$(head -1 /proc/stat)"
+  set -- $line
+  idle2=$5
+  total2=0
+  for v in "${@:2}"; do total2=$((total2 + v)); done
+  local idle_delta total_delta
+  idle_delta=$((idle2 - idle1))
+  total_delta=$((total2 - total1))
+  if [ "$total_delta" -gt 0 ]; then
+    cpu=$(awk -v a="$idle_delta" -v b="$total_delta" 'BEGIN{printf "%.1f", 100 * (1 - a / b)}')
+  else
+    cpu=0.0
+  fi
+
+  net_rx="$(awk '$1 ~ /^eth0:|^ens|^enp/ {rx+=$2} END{print rx+0}' /proc/net/dev)"
+  net_tx="$(awk '$1 ~ /^eth0:|^ens|^enp/ {tx+=$10} END{print tx+0}' /proc/net/dev)"
+
+  uptime_sec="$(awk '{print int($1)}' /proc/uptime)"
+
+  printf '{"ok":true,"cpu":%s,"load1":%s,"load5":%s,"load15":%s,' \
+    "$cpu" "$load1" "$load5" "$load15"
+  printf '"mem_total_kb":%s,"mem_avail_kb":%s,"swap_total_kb":%s,"swap_free_kb":%s,' \
+    "$mem_total" "$mem_avail" "$swap_total" "$swap_free"
+  printf '"disk_total_kb":%s,"disk_avail_kb":%s,"net_rx_bytes":%s,"net_tx_bytes":%s,"uptime_sec":%s}\n' \
+    "$disk_total" "$disk_avail" "$net_rx" "$net_tx" "$uptime_sec"
+  exit 0
+}
+
+# ---------------------------------------------------------------------------
+# health：自检
+# ---------------------------------------------------------------------------
+cmd_health() {
+  local failed=""
+  local libpam
+  libpam="$(python3 -c "import ctypes.util; print(ctypes.util.find_library('pam') or '')" 2>/dev/null)"
+  if [ -x "$PAM_VERIFY" ] && [ -n "$libpam" ]; then
+    :
+  else
+    failed="${failed}pam,"
+  fi
+  pdbedit -L >/dev/null 2>&1 || failed="${failed}samba,"
+  getent passwd guicang-svc >/dev/null 2>&1 || failed="${failed}svc,"
+  { [ -d "$STORAGE_ROOT" ] && [ -r "$STORAGE_ROOT" ]; } || failed="${failed}storage,"
+
+  if [ -z "$failed" ]; then
+    ok_json ",\"pam\":true,\"samba\":true,\"svc\":true,\"storage\":true"
+  fi
+  printf '{"ok":false,"error":"健康检查未通过","failed":"%s"}\n' "${failed%,}"
+  exit 1
+}
+
+# ---------------------------------------------------------------------------
+# 入口
+# ---------------------------------------------------------------------------
+require_root
+[ $# -ge 1 ] || fail "用法: guicang-helper <command> [args...]"
+
+case "$1" in
+  verify)     shift; cmd_verify "$@" ;;
+  user-add)   shift; cmd_user_add "$@" ;;
+  user-del)   shift; cmd_user_del "$@" ;;
+  user-mod)   shift; cmd_user_mod "$@" ;;
+  passwd)     shift; cmd_passwd "$@" ;;
+  samba-sync) shift; cmd_samba_sync "$@" ;;
+  metrics)    shift; cmd_metrics "$@" ;;
+  health)     shift; cmd_health "$@" ;;
+  *) fail "未知子命令: $1" ;;
+esac
