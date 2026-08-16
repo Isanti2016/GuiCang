@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- GuiCang 日志配置：控制台 + 结构化 JSON 文件（Filebeat 采集进 ELK）
+     文件目录：GUICANG_LOG_DIR 可覆盖（容器内 /var/log/guicang；本地默认 ./data/logs） -->
+<configuration>
+  <springProperty scope="context" name="appName" source="spring.application.name" defaultValue="guicang-backend"/>
+
+  <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+    <encoder>
+      <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [%thread] %logger{36} - %msg%n</pattern>
+      <charset>UTF-8</charset>
+    </encoder>
+  </appender>
+
+  <appender name="JSON_FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
+    <file>${GUICANG_LOG_DIR:-./data/logs}/app.log</file>
+    <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
+      <fileNamePattern>${GUICANG_LOG_DIR:-./data/logs}/app-%d{yyyy-MM-dd}.json.log</fileNamePattern>
+      <maxHistory>30</maxHistory>
+    </rollingPolicy>
+    <encoder class="net.logstash.logback.encoder.LogstashEncoder">
+      <customFields>{"app":"${appName}"}</customFields>
+    </encoder>
+  </appender>
+
+  <root level="INFO">
+    <appender-ref ref="CONSOLE"/>
+    <appender-ref ref="JSON_FILE"/>
+  </root>
+
+  <logger name="com.guicang.nas" level="DEBUG"/>
+</configuration>

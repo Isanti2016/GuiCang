@@ -1,0 +1,23 @@
+# GuiCang Filebeat 配置：采集 backend JSON 日志 → Elasticsearch
+filebeat.inputs:
+  - type: filestream
+    id: guicang-app
+    enabled: true
+    paths:
+      - /var/log/guicang/*.json.log
+    parsers:
+      - ndjson:
+          target: log
+          add_error_key: true
+    fields:
+      app: guicang-backend
+    fields_under_root: true
+
+output.elasticsearch:
+  hosts: ["http://elasticsearch:9200"]
+  index: "guicang-app-%{+yyyy.MM.dd}"
+
+setup.template.name: "guicang-app"
+setup.template.pattern: "guicang-app-*"
+
+logging.level: warning

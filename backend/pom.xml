@@ -92,6 +92,13 @@
       <version>0.4.20</version>
     </dependency>
 
+    <!-- 结构化 JSON 日志（ELK 链路） -->
+    <dependency>
+      <groupId>net.logstash.logback</groupId>
+      <artifactId>logstash-logback-encoder</artifactId>
+      <version>8.1</version>
+    </dependency>
+
     <!-- 数据库：SQLite 默认 + Flyway 迁移 -->
     <dependency>
       <groupId>org.flywaydb</groupId>
