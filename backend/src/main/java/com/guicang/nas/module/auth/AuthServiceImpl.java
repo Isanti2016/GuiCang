@@ -3,6 +3,7 @@ package com.guicang.nas.module.auth;
 import com.guicang.nas.common.BizException;
 import com.guicang.nas.common.ResultCodes;
 import com.guicang.nas.common.audit.Audit;
+import com.guicang.nas.common.security.AuthenticatedUser;
 import com.guicang.nas.infra.account.PAMVerifier;
 import com.guicang.nas.infra.account.PAMVerifyResult;
 import com.guicang.nas.module.auth.dto.CurrentUserInfo;
