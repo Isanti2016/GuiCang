@@ -1,0 +1,5 @@
+# 测试专用：共享内存 SQLite（每次测试上下文独立库，避免污染开发库）
+spring:
+  datasource:
+    url: jdbc:sqlite:file:guicang-test-${random.uuid}?mode=memory&cache=shared&journal_mode=WAL&busy_timeout=5000&foreign_keys=on
+    driver-class-name: org.sqlite.JDBC

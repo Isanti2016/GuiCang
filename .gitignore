@@ -3,6 +3,9 @@ target/
 *.class
 *.jar
 
+# 本地数据库文件（开发/运行期生成，不进 git）
+backend/data/
+
 # IDE
 .idea/
 *.iml

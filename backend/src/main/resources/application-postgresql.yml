@@ -6,3 +6,6 @@ spring:
     username: ${GUICANG_POSTGRES_USER:guicang}
     password: ${GUICANG_POSTGRES_PASSWORD:}
     driver-class-name: org.postgresql.Driver
+  flyway:
+    placeholders:
+      db-id-type: BIGSERIAL PRIMARY KEY

@@ -6,6 +6,11 @@ spring:
   jackson:
     time-zone: Asia/Shanghai
     date-format: yyyy-MM-dd HH:mm:ss
+  flyway:
+    locations: classpath:db/migration
+    placeholders:
+      # 主键类型默认按 SQLite；PostgreSQL profile 覆盖为 BIGSERIAL PRIMARY KEY
+      db-id-type: INTEGER PRIMARY KEY AUTOINCREMENT
 
 server:
   port: 8080

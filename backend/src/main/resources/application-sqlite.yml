@@ -1,6 +1,10 @@
 # SQLite 数据源（默认 profile）
-# 注意：JDBC 依赖与 Flyway 在 Step 1.2 接入；当前配置在引入 starter-jdbc 前不生效
+# 说明：
+# - file: 前缀 + pragma 查询参数（WAL/busy_timeout/foreign_keys）由 sqlite-jdbc 在建连时应用
+# - GUICANG_DATA_DIR 可覆盖数据目录（容器内为 /data）
 spring:
   datasource:
-    url: jdbc:sqlite:${GUICANG_DATA_DIR:./data}/guicang.db
+    url: jdbc:sqlite:file:${GUICANG_DATA_DIR:./data}/guicang.db?journal_mode=WAL&busy_timeout=5000&foreign_keys=on
     driver-class-name: org.sqlite.JDBC
+    hikari:
+      maximum-pool-size: 10
