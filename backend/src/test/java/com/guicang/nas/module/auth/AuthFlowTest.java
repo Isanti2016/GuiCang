@@ -7,10 +7,16 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.guicang.nas.common.ResultCodes;
 import com.guicang.nas.infra.account.PAMVerifier;
 import com.guicang.nas.infra.account.PAMVerifyResult;
+import com.guicang.nas.module.user.SysUser;
+import com.guicang.nas.module.user.SysUserMapper;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -30,7 +36,25 @@ class AuthFlowTest {
 
   @Autowired private ObjectMapper objectMapper;
 
+  @Autowired private SysUserMapper sysUserMapper;
+
   @MockBean private PAMVerifier pamVerifier;
+
+  @BeforeEach
+  void setUp() {
+    // 登录要求 sys_user 存在且启用（admin 角色）
+    sysUserMapper.delete(new LambdaQueryWrapper<SysUser>().eq(SysUser::getUsername, "alice"));
+    SysUser user = new SysUser();
+    user.setUsername("alice");
+    user.setDisplayName("爱丽丝");
+    user.setEnabled(1);
+    user.setRoleId(1L);
+    user.setHomePath("/home/alice");
+    String now = LocalDateTime.now().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME);
+    user.setCreatedAt(now);
+    user.setUpdatedAt(now);
+    sysUserMapper.insert(user);
+  }
 
   @Test
   void 登录成功返回令牌与用户信息() throws Exception {

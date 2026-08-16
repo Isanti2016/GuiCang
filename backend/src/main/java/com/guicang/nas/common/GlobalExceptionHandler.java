@@ -8,6 +8,8 @@ import org.slf4j.LoggerFactory;
 import org.springframework.context.MessageSourceResolvable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.core.AuthenticationException;
 import org.springframework.validation.BindException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
@@ -104,6 +106,20 @@ public class GlobalExceptionHandler {
   @ResponseStatus(HttpStatus.NOT_FOUND)
   public Result<Void> handleNoResourceFound(NoResourceFoundException e) {
     return Result.fail(ResultCodes.NOT_FOUND, "资源不存在");
+  }
+
+  /** 方法级鉴权失败（@PreAuthorize）。 */
+  @ExceptionHandler(AccessDeniedException.class)
+  @ResponseStatus(HttpStatus.FORBIDDEN)
+  public Result<Void> handleAccessDenied(AccessDeniedException e) {
+    return Result.fail(ResultCodes.FORBIDDEN, "无权限访问");
+  }
+
+  /** 认证失败（方法级安全场景）。 */
+  @ExceptionHandler(AuthenticationException.class)
+  @ResponseStatus(HttpStatus.UNAUTHORIZED)
+  public Result<Void> handleAuthentication(AuthenticationException e) {
+    return Result.fail(ResultCodes.UNAUTHORIZED, "未登录或登录已过期");
   }
 
   /** 兜底：未预期异常，记录堆栈但不向客户端泄露细节。 */

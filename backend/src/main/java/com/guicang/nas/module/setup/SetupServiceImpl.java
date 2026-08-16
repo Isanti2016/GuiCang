@@ -1,11 +1,16 @@
 package com.guicang.nas.module.setup;
 
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.guicang.nas.common.BizException;
 import com.guicang.nas.common.audit.Audit;
 import com.guicang.nas.infra.account.ProvisionStatus;
 import com.guicang.nas.infra.account.SystemAccountProvisioner;
 import com.guicang.nas.module.setup.dto.SetupInitRequest;
 import com.guicang.nas.module.setup.dto.SetupStatusResponse;
+import com.guicang.nas.module.user.SysRole;
+import com.guicang.nas.module.user.SysRoleMapper;
+import com.guicang.nas.module.user.SysUser;
+import com.guicang.nas.module.user.SysUserMapper;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import org.springframework.beans.factory.annotation.Value;
@@ -20,17 +25,25 @@ public class SetupServiceImpl implements SetupService {
   private static final String KEY_ADMIN_USERNAME = "setup.admin.username";
   private static final String KEY_ADMIN_PENDING = "setup.admin.pending";
   private static final String VALUE_TRUE = "1";
+  private static final String ROLE_CODE_ADMIN = "admin";
 
   private final SysConfigMapper sysConfigMapper;
   private final SystemAccountProvisioner systemAccountProvisioner;
+  private final SysUserMapper sysUserMapper;
+  private final SysRoleMapper sysRoleMapper;
 
   @Value("${guicang.storage.root}")
   private String storageRoot;
 
   public SetupServiceImpl(
-      SysConfigMapper sysConfigMapper, SystemAccountProvisioner systemAccountProvisioner) {
+      SysConfigMapper sysConfigMapper,
+      SystemAccountProvisioner systemAccountProvisioner,
+      SysUserMapper sysUserMapper,
+      SysRoleMapper sysRoleMapper) {
     this.sysConfigMapper = sysConfigMapper;
     this.systemAccountProvisioner = systemAccountProvisioner;
+    this.sysUserMapper = sysUserMapper;
+    this.sysRoleMapper = sysRoleMapper;
   }
 
   @Override
@@ -47,6 +60,25 @@ public class SetupServiceImpl implements SetupService {
     }
     // 触发管理员系统账号供给（helper 未接入时为 PENDING，Step 2.1 后落地）
     var provision = systemAccountProvisioner.provisionAdmin(request.username());
+    // 写入 admin 的 Web 元数据（角色 admin，密码由系统账号管理）
+    SysRole adminRole =
+        sysRoleMapper.selectOne(
+            new LambdaQueryWrapper<SysRole>().eq(SysRole::getCode, ROLE_CODE_ADMIN));
+    if (adminRole != null
+        && sysUserMapper.selectCount(
+                new LambdaQueryWrapper<SysUser>().eq(SysUser::getUsername, request.username()))
+            == 0) {
+      SysUser admin = new SysUser();
+      admin.setUsername(request.username());
+      admin.setDisplayName(request.displayName());
+      admin.setEnabled(1);
+      admin.setRoleId(adminRole.getId());
+      admin.setHomePath("/home/" + request.username());
+      String now = LocalDateTime.now().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME);
+      admin.setCreatedAt(now);
+      admin.setUpdatedAt(now);
+      sysUserMapper.insert(admin);
+    }
     saveConfig(KEY_SETUP_DONE, VALUE_TRUE);
     saveConfig(KEY_ADMIN_USERNAME, request.username());
     saveConfig(KEY_ADMIN_PENDING, provision.status() == ProvisionStatus.CREATED ? "0" : VALUE_TRUE);
