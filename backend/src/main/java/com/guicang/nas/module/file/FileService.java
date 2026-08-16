@@ -37,4 +37,7 @@ public interface FileService {
 
   /** 图片缩略图（需 READ 权限；懒生成 + 磁盘缓存，返回缩略图流信息）。 */
   FileStreamInfo thumbnail(String path);
+
+  /** 按名称/路径关键字搜索（索引查询 + 权限过滤）。 */
+  List<FileEntry> search(String keyword);
 }

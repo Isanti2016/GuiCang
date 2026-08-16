@@ -134,6 +134,12 @@ public class FileController {
         .body(resource);
   }
 
+  /** 文件名/路径搜索（file_index 索引）。 */
+  @GetMapping("/search")
+  public Result<List<FileEntry>> search(@RequestParam(required = false) String q) {
+    return Result.ok(fileService.search(q));
+  }
+
   private ResponseEntity<?> respond(
       FileStreamInfo info, HttpServletRequest request, String disposition) throws IOException {
     FileSystemResource resource = new FileSystemResource(info.path());

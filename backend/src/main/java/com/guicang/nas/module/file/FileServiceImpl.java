@@ -28,6 +28,7 @@ public class FileServiceImpl implements FileService {
   private final StorageService storageService;
   private final DirPermissionService dirPermissionService;
   private final ThumbnailService thumbnailService;
+  private final FileIndexService fileIndexService;
 
   @Value("${guicang.file.max-upload-size-bytes:1073741824}")
   private long maxUploadSizeBytes;
@@ -43,10 +44,12 @@ public class FileServiceImpl implements FileService {
   public FileServiceImpl(
       StorageService storageService,
       DirPermissionService dirPermissionService,
-      ThumbnailService thumbnailService) {
+      ThumbnailService thumbnailService,
+      FileIndexService fileIndexService) {
     this.storageService = storageService;
     this.dirPermissionService = dirPermissionService;
     this.thumbnailService = thumbnailService;
+    this.fileIndexService = fileIndexService;
   }
 
   @Override
@@ -62,6 +65,7 @@ public class FileServiceImpl implements FileService {
     AuthenticatedUser user = requireUser();
     dirPermissionService.check(user.username(), authorities(), path, DirPerm.WRITE);
     storageService.mkdir(path);
+    indexDir(path, user.username());
   }
 
   @Override
@@ -70,6 +74,8 @@ public class FileServiceImpl implements FileService {
     AuthenticatedUser user = requireUser();
     dirPermissionService.check(user.username(), authorities(), path, DirPerm.WRITE);
     storageService.rename(path, newName);
+    String newPath = path.substring(0, path.lastIndexOf('/') + 1) + newName;
+    fileIndexService.rename(path, newPath);
   }
 
   @Override
@@ -79,6 +85,10 @@ public class FileServiceImpl implements FileService {
     dirPermissionService.check(user.username(), authorities(), path, DirPerm.WRITE);
     dirPermissionService.check(user.username(), authorities(), target, DirPerm.WRITE);
     storageService.move(path, target);
+    String name = path.substring(path.lastIndexOf('/') + 1);
+    String targetDir = target == null || target.isBlank() || ".".equals(target) ? "" : target;
+    String newPath = targetDir.isBlank() ? name : targetDir + "/" + name;
+    fileIndexService.rename(path, newPath);
   }
 
   @Override
@@ -87,6 +97,7 @@ public class FileServiceImpl implements FileService {
     AuthenticatedUser user = requireUser();
     dirPermissionService.check(user.username(), authorities(), path, DirPerm.WRITE);
     storageService.delete(path, recursive);
+    fileIndexService.remove(path);
   }
 
   @Override
@@ -116,10 +127,13 @@ public class FileServiceImpl implements FileService {
     } catch (IOException e) {
       throw new BizException("上传失败: " + filename);
     }
-    return storageService.list(dirPath == null ? "." : dirPath).stream()
-        .filter(e -> e.name().equals(filename))
-        .findFirst()
-        .orElseThrow(() -> new BizException("上传后未找到文件"));
+    FileEntry entry =
+        storageService.list(dirPath == null ? "." : dirPath).stream()
+            .filter(e -> e.name().equals(filename))
+            .findFirst()
+            .orElseThrow(() -> new BizException("上传后未找到文件"));
+    indexEntry(entry, user.username());
+    return entry;
   }
 
   @Override
@@ -150,6 +164,52 @@ public class FileServiceImpl implements FileService {
     dirPermissionService.check(user.username(), authorities(), path, DirPerm.WRITE);
     requireTextExtension(path);
     storageService.writeText(path, content);
+    // 内容变更后重建索引（大小/时间戳刷新）
+    FileEntry entry = findEntry(path);
+    if (entry != null) {
+      indexEntry(entry, user.username());
+    }
+  }
+
+  @Override
+  public List<FileEntry> search(String keyword) {
+    AuthenticatedUser user = requireUser();
+    return fileIndexService.search(keyword).stream()
+        .filter(
+            idx ->
+                dirPermissionService.has(
+                    user.username(), authorities(), idx.getPath(), DirPerm.READ))
+        .map(
+            idx ->
+                new FileEntry(
+                    idx.getName(),
+                    idx.getPath(),
+                    "dir".equals(idx.getKind()),
+                    idx.getSize() == null ? 0 : idx.getSize(),
+                    idx.getMtime() == null ? 0 : idx.getMtime(),
+                    idx.getKind()))
+        .toList();
+  }
+
+  private FileEntry findEntry(String path) {
+    String dir = path.contains("/") ? path.substring(0, path.lastIndexOf('/')) : ".";
+    String name = path.substring(path.lastIndexOf('/') + 1);
+    return storageService.list(dir).stream()
+        .filter(e -> e.name().equals(name))
+        .findFirst()
+        .orElse(null);
+  }
+
+  private void indexEntry(FileEntry entry, String owner) {
+    fileIndexService.upsert(
+        entry.path(), entry.name(), entry.kind(), entry.size(), entry.mtime(), owner);
+  }
+
+  private void indexDir(String path, String owner) {
+    FileEntry entry = findEntry(path);
+    if (entry != null) {
+      indexEntry(entry, owner);
+    }
   }
 
   private void requireTextExtension(String path) {

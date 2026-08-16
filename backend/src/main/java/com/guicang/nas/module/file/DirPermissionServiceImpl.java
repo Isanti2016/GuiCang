@@ -44,6 +44,17 @@ public class DirPermissionServiceImpl implements DirPermissionService {
     }
   }
 
+  @Override
+  public boolean has(
+      String username, List<String> authorities, String relativePath, DirPerm required) {
+    String path = normalize(relativePath);
+    if (hasRole(authorities, ROLE_ADMIN)) {
+      return true;
+    }
+    DirPerm granted = resolveGranted(username, authorities, path);
+    return granted != null && granted.ordinal() >= required.ordinal();
+  }
+
   /** 用户对路径的最高权限 = max(基础规则, sys_user_dir 附加授权)；均无返回 null。 */
   private DirPerm resolveGranted(String username, List<String> authorities, String path) {
     return max(baseGrant(username, authorities, path), resolveUserDirGrant(username, path));
