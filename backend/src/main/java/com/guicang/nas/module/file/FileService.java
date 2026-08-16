@@ -28,4 +28,10 @@ public interface FileService {
 
   /** 文件流信息（需 READ 权限；用于下载/预览 Range 响应）。 */
   FileStreamInfo stream(String path);
+
+  /** 读取文本内容（需 READ 权限；限大小）。 */
+  String readText(String path);
+
+  /** 保存文本内容（需 WRITE 权限；仅允许 md/txt/markdown 扩展名）。 */
+  void writeText(String path, String content);
 }

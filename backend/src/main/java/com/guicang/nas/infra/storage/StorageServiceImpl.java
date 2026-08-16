@@ -148,6 +148,41 @@ public class StorageServiceImpl implements StorageService {
   }
 
   @Override
+  public void writeText(String relativePath, String content) {
+    Path target = PathUtils.resolve(storageRoot, relativePath);
+    PathUtils.checkRealPath(storageRoot, target);
+    validateName(target.getFileName().toString());
+    Path tmpDir = storageRoot.resolve(TMP_DIR);
+    try {
+      Files.createDirectories(tmpDir);
+      Path tmp = tmpDir.resolve(UUID.randomUUID() + ".part");
+      try {
+        Files.writeString(tmp, content);
+        Files.move(
+            tmp, target, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
+      } finally {
+        Files.deleteIfExists(tmp);
+      }
+    } catch (IOException e) {
+      throw new BizException("文本保存失败: " + relativePath);
+    }
+  }
+
+  @Override
+  public String readText(String relativePath, long maxBytes) {
+    Path file = resolveFile(relativePath);
+    try {
+      long size = Files.size(file);
+      if (size > maxBytes) {
+        throw new BizException("文本文件过大（超过 " + (maxBytes / 1024 / 1024) + "MB），请用下载查看");
+      }
+      return Files.readString(file);
+    } catch (IOException e) {
+      throw new BizException("读取文本失败: " + relativePath);
+    }
+  }
+
+  @Override
   public Path resolveFile(String relativePath) {
     Path file = PathUtils.resolve(storageRoot, relativePath);
     PathUtils.checkRealPath(storageRoot, file);

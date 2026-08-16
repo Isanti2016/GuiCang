@@ -33,6 +33,11 @@ public class FileServiceImpl implements FileService {
   @Value("${guicang.file.blocked-extensions:}")
   private Set<String> blockedExtensions;
 
+  @Value("${guicang.file.max-text-size-bytes:2097152}")
+  private long maxTextSizeBytes;
+
+  private static final Set<String> TEXT_EXTENSIONS = Set.of("md", "txt", "markdown");
+
   public FileServiceImpl(StorageService storageService, DirPermissionService dirPermissionService) {
     this.storageService = storageService;
     this.dirPermissionService = dirPermissionService;
@@ -121,6 +126,31 @@ public class FileServiceImpl implements FileService {
       return new FileStreamInfo(file, Files.size(file), FileTypeUtils.contentType(name), name);
     } catch (IOException e) {
       throw new BizException("读取文件信息失败: " + path);
+    }
+  }
+
+  @Override
+  public String readText(String path) {
+    AuthenticatedUser user = requireUser();
+    dirPermissionService.check(user.username(), authorities(), path, DirPerm.READ);
+    requireTextExtension(path);
+    return storageService.readText(path, maxTextSizeBytes);
+  }
+
+  @Override
+  @Audit(action = "file.write", resource = "#path")
+  public void writeText(String path, String content) {
+    AuthenticatedUser user = requireUser();
+    dirPermissionService.check(user.username(), authorities(), path, DirPerm.WRITE);
+    requireTextExtension(path);
+    storageService.writeText(path, content);
+  }
+
+  private void requireTextExtension(String path) {
+    String lower = path.toLowerCase();
+    boolean allowed = TEXT_EXTENSIONS.stream().anyMatch(ext -> lower.endsWith("." + ext));
+    if (!allowed) {
+      throw new BizException("仅支持编辑 md/txt/markdown 文本文件");
     }
   }
 

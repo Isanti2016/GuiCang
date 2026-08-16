@@ -31,6 +31,17 @@ public interface StorageService {
    */
   void upload(String targetRelativePath, InputStream inputStream, long size);
 
+  /**
+   * 文本写入（md/txt 保存）：同卷临时文件 + 原子改名，允许覆盖已存在文件。
+   *
+   * @param relativePath 目标相对路径
+   * @param content 文本内容
+   */
+  void writeText(String relativePath, String content);
+
+  /** 读取文本文件内容（超过 maxBytes 拒绝，防内存放大）。 */
+  String readText(String relativePath, long maxBytes);
+
   /** 解析并校验文件相对路径，返回绝对路径（用于下载/预览流式读取）。 */
   Path resolveFile(String relativePath);
 

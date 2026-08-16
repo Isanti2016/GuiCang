@@ -6,6 +6,7 @@ import com.guicang.nas.module.file.dto.FileMoveRequest;
 import com.guicang.nas.module.file.dto.FilePathRequest;
 import com.guicang.nas.module.file.dto.FileRenameRequest;
 import com.guicang.nas.module.file.dto.FileStreamInfo;
+import com.guicang.nas.module.file.dto.FileWriteRequest;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
@@ -102,6 +103,19 @@ public class FileController {
   public ResponseEntity<?> stream(@RequestParam @NotBlank String path, HttpServletRequest request)
       throws IOException {
     return respond(fileService.stream(path), request, "inline");
+  }
+
+  /** 读取文本内容（md/txt 预览）。 */
+  @GetMapping("/text")
+  public Result<String> text(@RequestParam @NotBlank String path) {
+    return Result.ok(fileService.readText(path));
+  }
+
+  /** 保存文本内容（md/txt 编辑）。 */
+  @PutMapping("/write")
+  public Result<Void> write(@Valid @RequestBody FileWriteRequest request) {
+    fileService.writeText(request.path(), request.content());
+    return Result.ok();
   }
 
   private ResponseEntity<?> respond(
