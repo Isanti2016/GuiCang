@@ -36,10 +36,10 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
   protected void doFilterInternal(
       HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
       throws ServletException, IOException {
-    String header = request.getHeader("Authorization");
-    if (header != null && header.startsWith(BEARER_PREFIX)) {
+    String token = resolveToken(request);
+    if (token != null) {
       try {
-        Claims claims = jwtService.parse(header.substring(BEARER_PREFIX.length()));
+        Claims claims = jwtService.parse(token);
         long uid = claims.get(JwtService.CLAIM_UID, Long.class);
         List<String> roles = claims.get(JwtService.CLAIM_ROLES, List.class);
         var principal = new AuthenticatedUser(claims.getSubject(), uid);
@@ -54,5 +54,15 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
       }
     }
     filterChain.doFilter(request, response);
+  }
+
+  /** 优先 Authorization 头，其次 query token（供 img/video 标签带认证访问）。 */
+  private String resolveToken(HttpServletRequest request) {
+    String header = request.getHeader("Authorization");
+    if (header != null && header.startsWith(BEARER_PREFIX)) {
+      return header.substring(BEARER_PREFIX.length());
+    }
+    String queryToken = request.getParameter("token");
+    return queryToken == null || queryToken.isBlank() ? null : queryToken;
   }
 }
