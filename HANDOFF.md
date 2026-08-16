@@ -3,7 +3,7 @@
 > 新对话开始工作前，请先读本文件，再读 AGENTS.md 与 docs/ 下的四份文档。
 
 ## 一句话状态
-M0（前后端骨架）与 M1（统一返回/异常、Flyway+SQLite 基础表、审计、初始化向导）已完成并提交；Step 2.1 helper 脚本已写好并测试通过（26 单测 + 9 端到端），**但尚未安装到宿主机（等用户确认）**。下一步：Step 2.2 认证链路（Security + JWT + PAM 登录）。
+M0（前后端骨架）与 M1（统一返回/异常、Flyway+SQLite 基础表、审计、初始化向导）已完成；Step 2.1 helper 脚本已写好并测试通过（26 单测 + 9 端到端），**但尚未安装到宿主机（等用户确认）**；Step 2.2 认证链路（Security + JWT + PAM 登录 + /auth/me + 登出）已完成并验证。下一步：Step 2.3 RBAC 与用户管理（V2__rbac.sql）。
 
 ## 项目与目标
 - 名称：GuiCang（归藏），家庭 NAS 管理系统。
@@ -27,14 +27,13 @@ M0（前后端骨架）与 M1（统一返回/异常、Flyway+SQLite 基础表、
 
 ## Git 与 SSH
 - 分支 main，origin = git@github.com:Isanti2016/GuiCang.git（SSH，私钥 ~/.ssh/guicang_github 已配置）。
-- 已提交里程碑：0.4 前端工程、0.5 后端工程、1.1 统一返回/异常、1.2 Flyway+SQLite、1.3 审计基础设施、1.4 初始化向导、2.1 helper 脚本（未部署）。
+- 已提交里程碑：0.4 前端、0.5 后端、1.1 统一返回/异常、1.2 Flyway+SQLite、1.3 审计、1.4 初始化向导、2.1 helper 脚本（未部署）、2.2 认证链路（JWT+PAM 登录）。
 
 ## 文档索引（都在 docs/）
 - NAS管理系统需求清单.md、NAS系统详细设计.md（helper 已统一命名 guicang-helper）、GuiCang技术方案与实施手册.md、AI规则与编码规范.md；根目录 AGENTS.md 为硬约束。
 
 ## 下一步（按手册逐 Step 执行，每步验证后中文提交）
-- Step 2.2：认证链路 —— Security 过滤器链 + JWT + PAM 登录（helper verify 走接口抽象，测试用 mock）+ /auth/me + 登出；登录埋审计。
-- Step 2.3：RBAC 与用户管理（V2__rbac.sql；用户 CRUD 调 helper 同步）。
+- Step 2.3：RBAC 与用户管理（V2__rbac.sql；用户 CRUD 调 helper 同步系统账号与 Samba；角色权限接入 @PreAuthorize 与目录级校验）。
 - 之后 M3 文件管理起。
 
 ## 待用户确认事项（重要）
