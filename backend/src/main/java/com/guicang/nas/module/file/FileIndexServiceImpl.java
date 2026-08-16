@@ -90,6 +90,18 @@ public class FileIndexServiceImpl implements FileIndexService {
             .orderByAsc(FileIndex::getPath));
   }
 
+  @Override
+  public List<FileIndex> listByPrefix(String prefix) {
+    if (prefix == null || prefix.isBlank()) {
+      return fileIndexMapper.selectList(null);
+    }
+    return fileIndexMapper.selectList(
+        new LambdaQueryWrapper<FileIndex>()
+            .eq(FileIndex::getPath, prefix)
+            .or()
+            .likeRight(FileIndex::getPath, prefix + "/"));
+  }
+
   private FileIndex findByPath(String relativePath) {
     return fileIndexMapper.selectOne(
         new LambdaQueryWrapper<FileIndex>().eq(FileIndex::getPath, relativePath));

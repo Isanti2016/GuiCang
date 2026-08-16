@@ -16,4 +16,7 @@ public interface FileIndexService {
 
   /** 按名称关键字搜索（LIKE 匹配 name）。 */
   List<FileIndex> search(String keyword);
+
+  /** 按路径前缀查询（含前缀自身，用于目录扫描对比）。 */
+  List<FileIndex> listByPrefix(String prefix);
 }
