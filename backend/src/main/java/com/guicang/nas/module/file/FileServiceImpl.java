@@ -8,6 +8,7 @@ import com.guicang.nas.common.security.CurrentUserContext;
 import com.guicang.nas.infra.storage.FileEntry;
 import com.guicang.nas.infra.storage.FileTypeUtils;
 import com.guicang.nas.infra.storage.StorageService;
+import com.guicang.nas.infra.thumbnail.ThumbnailService;
 import com.guicang.nas.module.file.dto.FileStreamInfo;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -26,6 +27,7 @@ public class FileServiceImpl implements FileService {
 
   private final StorageService storageService;
   private final DirPermissionService dirPermissionService;
+  private final ThumbnailService thumbnailService;
 
   @Value("${guicang.file.max-upload-size-bytes:1073741824}")
   private long maxUploadSizeBytes;
@@ -38,9 +40,13 @@ public class FileServiceImpl implements FileService {
 
   private static final Set<String> TEXT_EXTENSIONS = Set.of("md", "txt", "markdown");
 
-  public FileServiceImpl(StorageService storageService, DirPermissionService dirPermissionService) {
+  public FileServiceImpl(
+      StorageService storageService,
+      DirPermissionService dirPermissionService,
+      ThumbnailService thumbnailService) {
     this.storageService = storageService;
     this.dirPermissionService = dirPermissionService;
+    this.thumbnailService = thumbnailService;
   }
 
   @Override
@@ -151,6 +157,26 @@ public class FileServiceImpl implements FileService {
     boolean allowed = TEXT_EXTENSIONS.stream().anyMatch(ext -> lower.endsWith("." + ext));
     if (!allowed) {
       throw new BizException("仅支持编辑 md/txt/markdown 文本文件");
+    }
+  }
+
+  @Override
+  public FileStreamInfo thumbnail(String path) {
+    AuthenticatedUser user = requireUser();
+    dirPermissionService.check(user.username(), authorities(), path, DirPerm.READ);
+    Path source = storageService.resolveFile(path);
+    String name = source.getFileName().toString();
+    if (!"image".equals(FileTypeUtils.kind(name))) {
+      throw new BizException("仅图片支持缩略图: " + path);
+    }
+    try {
+      // 缓存键含大小与修改时间，文件变化自动重新生成
+      String cacheKey =
+          path + "|" + Files.size(source) + "|" + Files.getLastModifiedTime(source).toMillis();
+      Path thumb = thumbnailService.thumbnail(source, cacheKey);
+      return new FileStreamInfo(thumb, Files.size(thumb), "image/jpeg", "thumb.jpg");
+    } catch (IOException e) {
+      throw new BizException("读取缩略图失败: " + path);
     }
   }
 

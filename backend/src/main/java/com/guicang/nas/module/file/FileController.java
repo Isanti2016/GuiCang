@@ -17,9 +17,12 @@ import java.io.InputStream;
 import java.io.UnsupportedEncodingException;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.util.List;
 import org.springframework.core.io.FileSystemResource;
 import org.springframework.core.io.InputStreamResource;
+import org.springframework.core.io.Resource;
+import org.springframework.http.CacheControl;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpRange;
 import org.springframework.http.HttpStatus;
@@ -116,6 +119,19 @@ public class FileController {
   public Result<Void> write(@Valid @RequestBody FileWriteRequest request) {
     fileService.writeText(request.path(), request.content());
     return Result.ok();
+  }
+
+  /** 图片缩略图（懒生成 + 磁盘缓存，返回 256px JPEG）。 */
+  @GetMapping("/thumbnail")
+  public ResponseEntity<Resource> thumbnail(@RequestParam @NotBlank String path)
+      throws IOException {
+    FileStreamInfo info = fileService.thumbnail(path);
+    FileSystemResource resource = new FileSystemResource(info.path());
+    return ResponseEntity.ok()
+        .contentType(MediaType.parseMediaType(info.contentType()))
+        .contentLength(info.size())
+        .cacheControl(CacheControl.maxAge(Duration.ofDays(30)).cachePublic())
+        .body(resource);
   }
 
   private ResponseEntity<?> respond(

@@ -34,4 +34,7 @@ public interface FileService {
 
   /** 保存文本内容（需 WRITE 权限；仅允许 md/txt/markdown 扩展名）。 */
   void writeText(String path, String content);
+
+  /** 图片缩略图（需 READ 权限；懒生成 + 磁盘缓存，返回缩略图流信息）。 */
+  FileStreamInfo thumbnail(String path);
 }

@@ -64,4 +64,19 @@ public final class FileTypeUtils {
     String ext = name.substring(dot + 1).toLowerCase(Locale.ROOT);
     return blockedExtensions.contains(ext);
   }
+
+  /** 按扩展名归类：image / video / note / other。 */
+  public static String kind(String name) {
+    int dot = name.lastIndexOf('.');
+    if (dot < 0) {
+      return "other";
+    }
+    String ext = name.substring(dot + 1).toLowerCase(Locale.ROOT);
+    return switch (ext) {
+      case "jpg", "jpeg", "png", "gif", "webp", "bmp", "svg" -> "image";
+      case "mp4", "mkv", "webm", "avi", "mov", "m4v" -> "video";
+      case "md", "txt", "markdown" -> "note";
+      default -> "other";
+    };
+  }
 }
