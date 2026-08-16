@@ -1,0 +1,6 @@
+# SQLite 数据源（默认 profile）
+# 注意：JDBC 依赖与 Flyway 在 Step 1.2 接入；当前配置在引入 starter-jdbc 前不生效
+spring:
+  datasource:
+    url: jdbc:sqlite:${GUICANG_DATA_DIR:./data}/guicang.db
+    driver-class-name: org.sqlite.JDBC
