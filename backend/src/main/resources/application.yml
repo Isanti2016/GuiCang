@@ -11,6 +11,10 @@ spring:
     placeholders:
       # 主键类型默认按 SQLite；PostgreSQL profile 覆盖为 BIGSERIAL PRIMARY KEY
       db-id-type: INTEGER PRIMARY KEY AUTOINCREMENT
+  servlet:
+    multipart:
+      max-file-size: 1024MB
+      max-request-size: 1100MB
 
 server:
   port: 8080
@@ -28,6 +32,10 @@ guicang:
   helper:
     path: ${GUICANG_HELPER_PATH:/usr/local/bin/guicang-helper}
     pam-script: ${GUICANG_PAM_SCRIPT:../scripts/guicang-pam-verify.py}
+  file:
+    max-upload-size-bytes: 1073741824
+    # 上传拦截的危险扩展名（可配置）
+    blocked-extensions: exe,bat,cmd,com,scr,dll,msi,msp,ps1,vbs,jar,sh,bash,csh,ksh,zsh
 
 logging:
   level:

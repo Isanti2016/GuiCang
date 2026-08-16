@@ -6,18 +6,32 @@ import com.guicang.nas.common.audit.Audit;
 import com.guicang.nas.common.security.AuthenticatedUser;
 import com.guicang.nas.common.security.CurrentUserContext;
 import com.guicang.nas.infra.storage.FileEntry;
+import com.guicang.nas.infra.storage.FileTypeUtils;
 import com.guicang.nas.infra.storage.StorageService;
+import com.guicang.nas.module.file.dto.FileStreamInfo;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.List;
+import java.util.Set;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
+import org.springframework.web.multipart.MultipartFile;
 
-/** 文件管理服务实现：目录操作，每次操作校验登录与目录级权限，并审计留痕。 */
+/** 文件管理服务实现：目录操作与上传下载，每次操作校验登录与目录级权限，并审计留痕。 */
 @Service
 public class FileServiceImpl implements FileService {
 
   private final StorageService storageService;
   private final DirPermissionService dirPermissionService;
+
+  @Value("${guicang.file.max-upload-size-bytes:1073741824}")
+  private long maxUploadSizeBytes;
+
+  @Value("${guicang.file.blocked-extensions:}")
+  private Set<String> blockedExtensions;
 
   public FileServiceImpl(StorageService storageService, DirPermissionService dirPermissionService) {
     this.storageService = storageService;
@@ -62,6 +76,52 @@ public class FileServiceImpl implements FileService {
     AuthenticatedUser user = requireUser();
     dirPermissionService.check(user.username(), authorities(), path, DirPerm.WRITE);
     storageService.delete(path, recursive);
+  }
+
+  @Override
+  @Audit(action = "file.upload", resource = "#dirPath + '/' + #file.originalFilename")
+  public FileEntry upload(String dirPath, MultipartFile file) {
+    AuthenticatedUser user = requireUser();
+    dirPermissionService.check(user.username(), authorities(), dirPath, DirPerm.WRITE);
+    if (file == null || file.isEmpty()) {
+      throw new BizException("上传文件为空");
+    }
+    String filename = file.getOriginalFilename();
+    if (filename == null
+        || filename.isBlank()
+        || filename.contains("/")
+        || filename.contains("\\")) {
+      throw new BizException("文件名不合法");
+    }
+    if (file.getSize() > maxUploadSizeBytes) {
+      throw new BizException("文件超过大小上限（1G）");
+    }
+    if (FileTypeUtils.isBlocked(filename, blockedExtensions)) {
+      throw new BizException("不允许上传该类型文件: " + filename);
+    }
+    String target = dirPath == null || dirPath.isBlank() ? filename : dirPath + "/" + filename;
+    try {
+      storageService.upload(target, file.getInputStream(), file.getSize());
+    } catch (IOException e) {
+      throw new BizException("上传失败: " + filename);
+    }
+    return storageService.list(dirPath == null ? "." : dirPath).stream()
+        .filter(e -> e.name().equals(filename))
+        .findFirst()
+        .orElseThrow(() -> new BizException("上传后未找到文件"));
+  }
+
+  @Override
+  public FileStreamInfo stream(String path) {
+    AuthenticatedUser user = requireUser();
+    dirPermissionService.check(user.username(), authorities(), path, DirPerm.READ);
+    Path file = storageService.resolveFile(path);
+    try {
+      String name = file.getFileName().toString();
+      return new FileStreamInfo(file, Files.size(file), FileTypeUtils.contentType(name), name);
+    } catch (IOException e) {
+      throw new BizException("读取文件信息失败: " + path);
+    }
   }
 
   private AuthenticatedUser requireUser() {

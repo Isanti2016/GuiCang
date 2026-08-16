@@ -2,17 +2,25 @@ package com.guicang.nas.infra.storage;
 
 import com.guicang.nas.common.BizException;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.util.Comparator;
 import java.util.List;
+import java.util.UUID;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 /** 存储访问服务实现（基于 java.nio.file，全部路径经 {@link PathUtils} 校验）。 */
 @Service
 public class StorageServiceImpl implements StorageService {
+
+  private static final Logger log = LoggerFactory.getLogger(StorageServiceImpl.class);
+  private static final String TMP_DIR = ".guicang-tmp";
 
   private final Path storageRoot;
 
@@ -112,6 +120,60 @@ public class StorageServiceImpl implements StorageService {
       Files.deleteIfExists(path);
     } catch (IOException e) {
       // 单文件删除失败不中断整体递归（后续抛错由调用方感知）
+    }
+  }
+
+  @Override
+  public void upload(String targetRelativePath, InputStream inputStream, long size) {
+    Path target = PathUtils.resolve(storageRoot, targetRelativePath);
+    PathUtils.checkRealPath(storageRoot, target);
+    validateName(target.getFileName().toString());
+    if (Files.exists(target)) {
+      throw new BizException("目标已存在: " + targetRelativePath);
+    }
+    Path tmpDir = storageRoot.resolve(TMP_DIR);
+    try {
+      Files.createDirectories(tmpDir);
+      // 同卷临时文件，保证最终 rename 原子且不跨设备
+      Path tmp = tmpDir.resolve(UUID.randomUUID() + ".part");
+      try {
+        copyStream(inputStream, tmp, size);
+        Files.move(tmp, target, StandardCopyOption.ATOMIC_MOVE);
+      } finally {
+        Files.deleteIfExists(tmp);
+      }
+    } catch (IOException e) {
+      throw new BizException("上传写入失败: " + targetRelativePath);
+    }
+  }
+
+  @Override
+  public Path resolveFile(String relativePath) {
+    Path file = PathUtils.resolve(storageRoot, relativePath);
+    PathUtils.checkRealPath(storageRoot, file);
+    if (!Files.isRegularFile(file)) {
+      throw new BizException("文件不存在: " + relativePath);
+    }
+    return file;
+  }
+
+  @Override
+  public Path root() {
+    return storageRoot;
+  }
+
+  private void copyStream(InputStream inputStream, Path tmp, long expectedSize) throws IOException {
+    try (OutputStream out = Files.newOutputStream(tmp)) {
+      byte[] buffer = new byte[8192];
+      long written = 0;
+      int read;
+      while ((read = inputStream.read(buffer)) != -1) {
+        out.write(buffer, 0, read);
+        written += read;
+      }
+      if (expectedSize >= 0 && written != expectedSize) {
+        throw new IOException("文件大小与声明不符: expected=" + expectedSize + " actual=" + written);
+      }
     }
   }
 
