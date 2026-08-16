@@ -3,46 +3,47 @@
 > 新对话开始工作前，请先读本文件，再读 AGENTS.md 与 docs/ 下的四份文档。
 
 ## 一句话状态
-M0（前后端骨架）与 M1（统一返回/异常、Flyway+SQLite 基础表、审计、初始化向导）已完成；Step 2.1 helper 脚本已写好并测试通过（26 单测 + 9 端到端），**但尚未安装到宿主机（等用户确认）**；Step 2.2 认证链路（Security + JWT + PAM 登录 + /auth/me + 登出）已完成并验证。下一步：Step 2.3 RBAC 与用户管理（V2__rbac.sql）。
+阶段 0–5 全部完成（M0 骨架 / M1 基础 / M2 账号 RBAC / M3 文件 / M4 监控大屏 / M5 同步审计），阶段 6 部署配置已写好（Dockerfile/compose/nginx/ELK/一键脚本）**但未执行**（需确认后部署）。后端 78 个测试全绿，前端 lint/build 通过。下一步：用户确认后部署（阶段 6 执行），之后阶段 7 测试文档、8 升级压测。
 
 ## 项目与目标
-- 名称：GuiCang（归藏），家庭 NAS 管理系统。
-- 仓库：https://github.com/Isanti2016/GuiCang
-- 本地仓库/工作目录：/home/codes/guicang
-- 目标：Web 统一管理现有 Samba/NFS 存储 /home/wb/nas，提供用户权限、文件管理、md/txt 编辑、图片视频预览、监控大屏、同步、审计，Tailscale 外网访问。
+- 名称：GuiCang（归藏），家庭 NAS 管理系统。仓库：https://github.com/Isanti2016/GuiCang
+- 本地：/home/codes/guicang。目标：Web 统一管理 Samba/NFS 存储 /home/wb/nas（文件/用户/监控/同步/审计，Tailscale 外网）。
 
 ## 已确认的关键决策
-- 技术栈：Java 21 + Spring Boot 3.3.x + Maven；Vue 3 + TS + Element Plus + Vite 6；SQLite（默认，可切 PostgreSQL）；Redis；本地 ELK；Docker Compose + Nginx。
-- 并发：注册数百、同时在线数十、读多写少；单文件 ≤1G。
-- 账号打通：方案 A —— Web 用户 = Linux 系统用户，PAM 认证，sudo 白名单 helper（guicang-helper）管理系统账号，后端不跑 root。
-- 初始管理员：首次初始化新建独立 admin。
-- md/txt：一期网页内编辑保存；缩略图一期做；视频一期不转码（只播 MP4/H.264）；一期 HTTP；分享链接二期。
-- 提交：一律中文 Conventional Commits（类型(范围): 中文描述）。
+- Java 21 + Spring Boot 3.3.x + Maven；Vue 3 + TS + Vite 6 + Element Plus；SQLite（可切 PG）；Redis；本地 ELK；Docker Compose + Nginx。
+- 账号：Web 用户 = Linux 系统用户，PAM 认证，sudo 白名单 guicang-helper 管理账号，后端不跑 root。
+- 密码不落业务库；JWT HS256（密钥经 GUICANG_JWT_SECRET 注入，开发有内置默认值）。
+- 提交：一律中文 Conventional Commits。
 
-## 环境现状（本机 Ubuntu 24.04，4C/15G，数据盘 /home 916G）
-- 已装：Java 21.0.11、Maven 3.9.16（/opt/maven）、Docker Compose 2.40.3、SQLite 3.45.1、Node 24、pnpm 11.7、Git 2.43、python3 3.12。
-- 已有服务：Samba 4.19.5（pdbedit -L 正常，账号 wb/app_data）、NFS、Tailscale（100.112.98.102）、MariaDB（不用）、Apache2（80 端口占，需迁 8081）、ffmpeg 6.1.1。
-- 端口注意：80 给 Nginx；3080 是 DSH GUI 绝不能动；3306/445/139/2049 保持现状。
-- 检查：uid 1002、gid 2000/2001 空闲（尚未创建 nasusers/nasops/guicang-svc）。
+## 环境现状（本机 Ubuntu 24.04）
+- Java 21.0.11 / Maven 3.9.16 / Node 24 / pnpm 11.7 / SQLite 3.45 / python3 3.12 / ffmpeg 6.1.1。
+- Samba 4.19.5（pdbedit -L 正常，账号 wb/app_data）、NFS、Tailscale(100.112.98.102)、MariaDB（不用）、Apache2（80 端口占，部署阶段需迁 8081）。
+- uid 1002、gid 2000/2001 空闲（未创建 nasusers/nasops/guicang-svc）。
 
-## Git 与 SSH
-- 分支 main，origin = git@github.com:Isanti2016/GuiCang.git（SSH，私钥 ~/.ssh/guicang_github 已配置）。
-- 已提交里程碑：0.4 前端、0.5 后端、1.1 统一返回/异常、1.2 Flyway+SQLite、1.3 审计、1.4 初始化向导、2.1 helper 脚本（未部署）、2.2 认证链路（JWT+PAM 登录）。
+## 已实现功能（全部提交并推送）
+- 后端 API：认证（login/me/logout，PAM 校验 helper/local 双实现）、用户/角色/权限 CRUD（RBAC）、
+  文件（list/mkdir/rename/move/delete/upload≤1G/download/stream Range/text/write/thumbnail/search）、
+  监控（overview/series 30s 采集）、大屏 summary、同步任务（Quartz + 立即执行 + 历史）、审计（注解 AOP + 查询）、
+  初始化向导。Flyway V1–V4。统一返回/全局异常。登录/文件/用户/同步全链路审计。
+- 前端：登录、布局（侧边栏按权限）、大屏（ECharts 30s 轮询）、文件管理（树+表格+预览 md/图片/视频+编辑保存）、
+  同步任务页、审计查询页。axios 拦截器（401 跳登录），img/video 媒体 URL 带 query token。
+- 脚本：guicang-helper（8 子命令 + PAM 校验器，26 单测 + 9 e2e）、install-helper.sh（幂等安装）、
+  dir-permissions.sh / samba-include.sh（目录权限与 Samba 共享生成）、setup.sh / deploy.sh / backup.sh。
+- 部署配置：前后端 Dockerfile、docker-compose.yml（nginx/backend/redis/es/kibana/filebeat）、
+  nginx 反代（Range + 1100m）、filebeat.yml、.env.example、logback JSON 日志。
 
-## 文档索引（都在 docs/）
-- NAS管理系统需求清单.md、NAS系统详细设计.md（helper 已统一命名 guicang-helper）、GuiCang技术方案与实施手册.md、AI规则与编码规范.md；根目录 AGENTS.md 为硬约束。
-
-## 下一步（按手册逐 Step 执行，每步验证后中文提交）
-- Step 2.3：RBAC 与用户管理（V2__rbac.sql；用户 CRUD 调 helper 同步系统账号与 Samba；角色权限接入 @PreAuthorize 与目录级校验）。
-- 之后 M3 文件管理起。
-
-## 待用户确认事项（重要）
-1. **Step 2.1 宿主机安装**：`sudo ./scripts/install-helper.sh`（先 `--dry-run` 预览）。动作：建组 nasusers(2000)/nasops(2001)、服务账号 guicang-svc(1002)、装 /usr/local/bin/guicang-helper + sudoers 白名单。全部为新增/覆盖自身文件，不动现有 wb/app_data 与 Samba 数据；已做幂等与备份。确认后我再执行，或你自己跑。
-2. **admin 系统账号创建**：初始化向导目前只落元数据并标记 pending，helper 部署后需补建 admin 系统账号并设密码（配合 Step 2.2 登录）。
+## 待用户确认 / 后续步骤
+1. **阶段 2 宿主准备**（影响现有 Samba/目录，须确认后执行）：
+   - `sudo ./scripts/install-helper.sh`（建 nasusers/nasops/guicang-svc、装 helper、sudoers 白名单）
+   - `sudo ./scripts/dir-permissions.sh --apply`（NAS 目录 setgid 权限，先备份快照）
+   - `sudo ./scripts/samba-include.sh --apply`（生成 Samba 共享段，smb.conf 备份 + testparm）
+   - 然后补建 admin 系统账号（初始化向导已落元数据 pending）
+2. **阶段 6 部署**：`bash scripts/setup.sh` → `bash scripts/deploy.sh`（注意 80 端口：Apache2 需先迁 8081）。
+3. 阶段 7：后端核心 Service 覆盖率、前端冒烟、权限矩阵验收；阶段 8：upgrade.sh、压测。
 
 ## 注意事项 / 已知坑
-- 后端 dev 数据库在 backend/data/（已 gitignore）；测试用共享内存 SQLite。
-- Flyway 锁定 9.22.3（10 社区版无 SQLite 模块）；迁移脚本主键经 ${db-id-type} placeholder 区分库。
-- @Audit 注解 resource 支持 SpEL（#参数名/#result），编译需 -parameters（已配置）。
-- pkill -f 会误杀自身 bash（命令行含匹配串），停后端用端口 PID（ss 取 pid）。
-- 需求/设计变更要同步更新 docs/ 四份文档与本文档。
+- 后端 dev 库 backend/data（gitignore）；测试用共享内存 SQLite。
+- Flyway 锁定 9.22.3（10 社区版无 SQLite 模块）；@Audit SpEL 需 -parameters（已配）。
+- 前端 markdown 渲染用 markdown-it（html:false 转义原始 HTML，v-html 仅用于 md 渲染结果）。
+- 停止后端用端口 PID（ss -ltnp | grep :8080），勿用 pkill -f 匹配命令行（会误杀自身 bash）。
+- 需求/设计变更要同步 docs/ 四份文档与本文件。

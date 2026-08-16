@@ -595,5 +595,8 @@ GUICANG_ADMIN_INITIAL=<首次向导填写>
 - Redis 若在意许可，直接换 Valkey（同协议兼容），compose 里改镜像即可。
 - 【实施记录 2026-08】Flyway 10 社区版不再在 Maven Central 提供 SQLite 模块，pom 锁定 flyway 9.22.3（内置 SQLite 支持）；迁移脚本用 `${db-id-type}` placeholder 区分 SQLite/PG 主键。
 - 【实施记录 2026-08】特权脚本统一命名 guicang-helper（早期《详细设计》中的 nas-user-helper 已更名对齐）；宿主机安装由 scripts/install-helper.sh 幂等执行（需 root，安装前先备份）。
+- 【实施记录 2026-08】缩略图输出为 256px JPEG（Thumbnailator 与 ffmpeg 均不支持 WebP 输出，原设计 WebP 以 JPEG 实施）。
+- 【实施记录 2026-08】JWT 密钥默认仅限开发（application.yml 内置 dev 默认值），生产由 GUICANG_JWT_SECRET 注入（setup.sh 生成）。
+- 【实施记录 2026-08】目录级权限一期规则：admin 全权、personal/本人 WRITE、shared member 写/guest 读、media 读、sys_user_dir 附加授权取最高。
 
 
