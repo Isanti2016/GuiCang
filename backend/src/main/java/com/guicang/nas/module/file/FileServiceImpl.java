@@ -166,14 +166,19 @@ public class FileServiceImpl implements FileService {
     dirPermissionService.check(user.username(), authorities(), path, DirPerm.READ);
     Path source = storageService.resolveFile(path);
     String name = source.getFileName().toString();
-    if (!"image".equals(FileTypeUtils.kind(name))) {
-      throw new BizException("仅图片支持缩略图: " + path);
-    }
+    String kind = FileTypeUtils.kind(name);
     try {
       // 缓存键含大小与修改时间，文件变化自动重新生成
       String cacheKey =
           path + "|" + Files.size(source) + "|" + Files.getLastModifiedTime(source).toMillis();
-      Path thumb = thumbnailService.thumbnail(source, cacheKey);
+      Path thumb;
+      if ("image".equals(kind)) {
+        thumb = thumbnailService.thumbnail(source, cacheKey);
+      } else if ("video".equals(kind)) {
+        thumb = thumbnailService.videoThumbnail(source, cacheKey);
+      } else {
+        throw new BizException("仅图片/视频支持缩略图: " + path);
+      }
       return new FileStreamInfo(thumb, Files.size(thumb), "image/jpeg", "thumb.jpg");
     } catch (IOException e) {
       throw new BizException("读取缩略图失败: " + path);

@@ -1,28 +1,26 @@
 package com.guicang.nas.module.file;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.guicang.nas.common.ResultCodes;
 import com.guicang.nas.infra.account.PAMVerifier;
 import com.guicang.nas.infra.account.PAMVerifyResult;
 import com.guicang.nas.module.user.SysUser;
 import com.guicang.nas.module.user.SysUserMapper;
-import java.awt.image.BufferedImage;
-import java.io.ByteArrayOutputStream;
+import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
-import javax.imageio.ImageIO;
+import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -40,11 +38,15 @@ import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 
-/** 图片缩略图测试：懒生成、JPEG 缓存、非图片拒绝（临时存储根与缩略图目录）。 */
+/**
+ * 视频缩略图测试：ffmpeg 抽帧生成 JPEG 封面（ffmpeg 缺失时跳过）。
+ *
+ * <p>视频 Range 播放能力已在 UploadDownloadTest（206 部分内容）覆盖。
+ */
 @SpringBootTest
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
-class ThumbnailTest {
+class VideoThumbnailTest {
 
   @TempDir static Path tempRoot;
 
@@ -64,9 +66,12 @@ class ThumbnailTest {
 
   private String adminToken;
 
+  private static Path sampleVideo;
+
   @BeforeAll
   static void prepareRoot() throws Exception {
     Files.createDirectories(tempRoot.resolve("shared"));
+    sampleVideo = tempRoot.resolve("sample.mp4");
   }
 
   @BeforeEach
@@ -78,17 +83,32 @@ class ThumbnailTest {
   }
 
   @Test
-  void 图片生成JPEG缩略图并缓存() throws Exception {
-    // 生成 200x150 真实 PNG
-    BufferedImage image = new BufferedImage(200, 150, BufferedImage.TYPE_INT_RGB);
-    image.getGraphics().fillRect(0, 0, 200, 150);
-    ByteArrayOutputStream baos = new ByteArrayOutputStream();
-    ImageIO.write(image, "png", baos);
+  void 视频生成JPEG封面() throws Exception {
+    assumeTrue(ffmpegAvailable(), "ffmpeg 不可用，跳过视频缩略图测试");
+
+    // ffmpeg 生成 1 秒测试视频
+    Process generate =
+        new ProcessBuilder(
+                "ffmpeg",
+                "-f",
+                "lavfi",
+                "-i",
+                "color=c=blue:s=320x240:d=2",
+                "-pix_fmt",
+                "yuv420p",
+                "-y",
+                sampleVideo.toString())
+            .redirectErrorStream(true)
+            .start();
+    generate.getInputStream().readAllBytes();
+    assumeTrue(generate.waitFor(30, TimeUnit.SECONDS) && generate.exitValue() == 0, "测试视频生成失败");
 
     mockMvc
         .perform(
             multipart("/api/v1/files/upload")
-                .file(new MockMultipartFile("file", "photo.png", "image/png", baos.toByteArray()))
+                .file(
+                    new MockMultipartFile(
+                        "file", "sample.mp4", "video/mp4", Files.readAllBytes(sampleVideo)))
                 .param("path", "shared")
                 .header("Authorization", bearer(adminToken)))
         .andExpect(status().isOk());
@@ -97,42 +117,26 @@ class ThumbnailTest {
         mockMvc
             .perform(
                 get("/api/v1/files/thumbnail")
-                    .param("path", "shared/photo.png")
+                    .param("path", "shared/sample.mp4")
                     .header("Authorization", bearer(adminToken)))
             .andExpect(status().isOk())
             .andExpect(header().string(HttpHeaders.CONTENT_TYPE, "image/jpeg"))
             .andReturn();
 
-    byte[] thumbBytes = result.getResponse().getContentAsByteArray();
-    assertThat(thumbBytes).isNotEmpty();
-    // JPEG 魔数
-    assertThat(thumbBytes[0]).isEqualTo((byte) 0xFF);
-    assertThat(thumbBytes[1]).isEqualTo((byte) 0xD8);
-    // 缩略图缓存已落盘
-    try (var thumbs = Files.list(tempRoot.resolve("thumbs"))) {
-      assertThat(thumbs).isNotEmpty();
-    }
-    // 二次访问命中缓存（仍是 200 + JPEG）
-    mockMvc
-        .perform(
-            get("/api/v1/files/thumbnail")
-                .param("path", "shared/photo.png")
-                .header("Authorization", bearer(adminToken)))
-        .andExpect(status().isOk())
-        .andExpect(header().string(HttpHeaders.CONTENT_TYPE, "image/jpeg"));
+    byte[] thumb = result.getResponse().getContentAsByteArray();
+    assertThat(thumb).isNotEmpty();
+    assertThat(thumb[0]).isEqualTo((byte) 0xFF);
+    assertThat(thumb[1]).isEqualTo((byte) 0xD8);
   }
 
-  @Test
-  void 非图片文件缩略图被拒() throws Exception {
-    Files.writeString(tempRoot.resolve("shared/note.md"), "# 标题");
-    mockMvc
-        .perform(
-            get("/api/v1/files/thumbnail")
-                .param("path", "shared/note.md")
-                .header("Authorization", bearer(adminToken)))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.code").value(ResultCodes.BIZ_ERROR))
-        .andExpect(jsonPath("$.message").value("仅图片/视频支持缩略图: shared/note.md"));
+  private boolean ffmpegAvailable() {
+    try {
+      Process p = new ProcessBuilder("ffmpeg", "-version").redirectErrorStream(true).start();
+      p.getInputStream().readAllBytes();
+      return p.waitFor(10, TimeUnit.SECONDS) && p.exitValue() == 0;
+    } catch (IOException | InterruptedException e) {
+      return false;
+    }
   }
 
   private void insertUser(String username, Long roleId, int enabled) {
