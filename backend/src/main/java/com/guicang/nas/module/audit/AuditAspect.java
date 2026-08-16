@@ -4,17 +4,27 @@ import com.guicang.nas.common.audit.Audit;
 import com.guicang.nas.common.audit.CurrentUserResolver;
 import com.guicang.nas.module.audit.dto.AuditLogCreateDTO;
 import jakarta.servlet.http.HttpServletRequest;
+import java.lang.reflect.Method;
 import org.aspectj.lang.ProceedingJoinPoint;
 import org.aspectj.lang.annotation.Around;
 import org.aspectj.lang.annotation.Aspect;
+import org.aspectj.lang.reflect.MethodSignature;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.core.DefaultParameterNameDiscoverer;
+import org.springframework.core.ParameterNameDiscoverer;
+import org.springframework.expression.EvaluationContext;
+import org.springframework.expression.ExpressionParser;
+import org.springframework.expression.spel.standard.SpelExpressionParser;
+import org.springframework.expression.spel.support.StandardEvaluationContext;
 import org.springframework.stereotype.Component;
 import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
 
 /**
  * 审计切面：拦截 {@link Audit} 注解方法，记录操作者/动作/对象/来源与结果。
+ *
+ * <p>resource 支持 SpEL 表达式（以 # 开头，按方法参数名求值，可用 #result 引用返回值）， 编译需开启 {@code -parameters}。
  *
  * <p>审计写入为尽力而为：写入失败只记日志，不影响业务执行；detail 仅记录异常类型，避免泄露敏感信息。
  */
@@ -26,9 +36,13 @@ public class AuditAspect {
 
   private static final String RESULT_SUCCESS = "success";
   private static final String RESULT_FAILED = "failed";
+  private static final String SPEL_PREFIX = "#";
 
   private final AuditService auditService;
   private final CurrentUserResolver currentUserResolver;
+  private final ExpressionParser expressionParser = new SpelExpressionParser();
+  private final ParameterNameDiscoverer parameterNameDiscoverer =
+      new DefaultParameterNameDiscoverer();
 
   public AuditAspect(AuditService auditService, CurrentUserResolver currentUserResolver) {
     this.auditService = auditService;
@@ -39,24 +53,56 @@ public class AuditAspect {
   public Object aroundAuditedMethod(ProceedingJoinPoint joinPoint, Audit audit) throws Throwable {
     String result = RESULT_SUCCESS;
     String detail = null;
+    Object returnValue = null;
     try {
-      return joinPoint.proceed();
+      returnValue = joinPoint.proceed();
+      return returnValue;
     } catch (Throwable e) {
       result = RESULT_FAILED;
       detail = e.getClass().getSimpleName();
       throw e;
     } finally {
-      recordAudit(audit, result, detail);
+      recordAudit(audit, resolveResource(audit.resource(), joinPoint, returnValue), result, detail);
     }
   }
 
-  private void recordAudit(Audit audit, String result, String detail) {
+  private String resolveResource(
+      String resource, ProceedingJoinPoint joinPoint, Object returnValue) {
+    if (resource == null || !resource.startsWith(SPEL_PREFIX)) {
+      return resource;
+    }
+    try {
+      EvaluationContext context = buildEvaluationContext(joinPoint, returnValue);
+      return String.valueOf(expressionParser.parseExpression(resource).getValue(context));
+    } catch (Exception e) {
+      log.warn("审计 resource SpEL 解析失败: {}", resource, e);
+      return resource;
+    }
+  }
+
+  private EvaluationContext buildEvaluationContext(
+      ProceedingJoinPoint joinPoint, Object returnValue) {
+    StandardEvaluationContext context = new StandardEvaluationContext();
+    MethodSignature signature = (MethodSignature) joinPoint.getSignature();
+    Method method = signature.getMethod();
+    String[] parameterNames = parameterNameDiscoverer.getParameterNames(method);
+    Object[] args = joinPoint.getArgs();
+    if (parameterNames != null) {
+      for (int i = 0; i < parameterNames.length && i < args.length; i++) {
+        context.setVariable(parameterNames[i], args[i]);
+      }
+    }
+    context.setVariable("result", returnValue);
+    return context;
+  }
+
+  private void recordAudit(Audit audit, String resource, String result, String detail) {
     try {
       auditService.record(
           new AuditLogCreateDTO(
               currentUserResolver.currentUsername().orElse(null),
               audit.action(),
-              audit.resource(),
+              resource,
               resolveClientIp(),
               resolveUserAgent(),
               result,
