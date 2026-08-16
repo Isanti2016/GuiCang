@@ -1,77 +1,77 @@
 <script setup lang="ts">
-import { onMounted, reactive, ref } from 'vue'
-import { fetchAuditLogs, type AuditLog } from '@/api/audit'
+import { onMounted, reactive, ref } from "vue";
+import { fetchAuditLogs, type AuditLog } from "@/api/audit";
 
-const records = ref<AuditLog[]>([])
-const total = ref(0)
-const loading = ref(false)
-const page = ref(1)
-const size = ref(20)
+const records = ref<AuditLog[]>([]);
+const total = ref(0);
+const loading = ref(false);
+const page = ref(1);
+const size = ref(20);
 
 const filters = reactive({
-  username: '',
-  action: '',
-  result: '',
-})
+  username: "",
+  action: "",
+  result: "",
+});
 
 const actionLabels: Record<string, string> = {
-  login: '登录',
-  'setup.init': '系统初始化',
-  'user.create': '新建用户',
-  'user.delete': '删除用户',
-  'user.status': '用户状态',
-  'user.password': '重置密码',
-  'role.create': '新建角色',
-  'role.update': '编辑角色',
-  'role.delete': '删除角色',
-  'file.upload': '上传',
-  'file.write': '编辑文件',
-  'file.mkdir': '新建目录',
-  'file.rename': '重命名',
-  'file.move': '移动',
-  'file.delete': '删除',
-  'sync.create': '新建同步任务',
-  'sync.update': '编辑同步任务',
-  'sync.delete': '删除同步任务',
-}
+  login: "登录",
+  "setup.init": "系统初始化",
+  "user.create": "新建用户",
+  "user.delete": "删除用户",
+  "user.status": "用户状态",
+  "user.password": "重置密码",
+  "role.create": "新建角色",
+  "role.update": "编辑角色",
+  "role.delete": "删除角色",
+  "file.upload": "上传",
+  "file.write": "编辑文件",
+  "file.mkdir": "新建目录",
+  "file.rename": "重命名",
+  "file.move": "移动",
+  "file.delete": "删除",
+  "sync.create": "新建同步任务",
+  "sync.update": "编辑同步任务",
+  "sync.delete": "删除同步任务",
+};
 
-const actionLabel = (action: string): string => actionLabels[action] ?? action
+const actionLabel = (action: string): string => actionLabels[action] ?? action;
 
 async function load(): Promise<void> {
-  loading.value = true
+  loading.value = true;
   try {
     const data = await fetchAuditLogs(page.value, size.value, {
       username: filters.username || undefined,
       action: filters.action || undefined,
       result: filters.result || undefined,
-    })
-    records.value = data.records
-    total.value = data.total
+    });
+    records.value = data.records;
+    total.value = data.total;
   } finally {
-    loading.value = false
+    loading.value = false;
   }
 }
 
 function handleSearch(): void {
-  page.value = 1
-  void load()
+  page.value = 1;
+  void load();
 }
 
 function handleReset(): void {
-  filters.username = ''
-  filters.action = ''
-  filters.result = ''
-  handleSearch()
+  filters.username = "";
+  filters.action = "";
+  filters.result = "";
+  handleSearch();
 }
 
 function handlePageChange(value: number): void {
-  page.value = value
-  void load()
+  page.value = value;
+  void load();
 }
 
 onMounted(() => {
-  void load()
-})
+  void load();
+});
 </script>
 
 <template>
@@ -79,13 +79,28 @@ onMounted(() => {
     <el-card shadow="never" class="audit-view__filter">
       <el-form inline>
         <el-form-item label="用户名">
-          <el-input v-model="filters.username" placeholder="操作者" clearable style="width: 160px" />
+          <el-input
+            v-model="filters.username"
+            placeholder="操作者"
+            clearable
+            style="width: 160px"
+          />
         </el-form-item>
         <el-form-item label="动作">
-          <el-input v-model="filters.action" placeholder="如 file.upload" clearable style="width: 160px" />
+          <el-input
+            v-model="filters.action"
+            placeholder="如 file.upload"
+            clearable
+            style="width: 160px"
+          />
         </el-form-item>
         <el-form-item label="结果">
-          <el-select v-model="filters.result" clearable placeholder="全部" style="width: 110px">
+          <el-select
+            v-model="filters.result"
+            clearable
+            placeholder="全部"
+            style="width: 110px"
+          >
             <el-option label="成功" value="success" />
             <el-option label="失败" value="failed" />
           </el-select>
@@ -104,18 +119,32 @@ onMounted(() => {
         <el-table-column label="动作" width="130">
           <template #default="{ row }">{{ actionLabel(row.action) }}</template>
         </el-table-column>
-        <el-table-column prop="resource" label="对象" min-width="200" show-overflow-tooltip />
+        <el-table-column
+          prop="resource"
+          label="对象"
+          min-width="200"
+          show-overflow-tooltip
+        />
         <el-table-column prop="result" label="结果" width="80">
           <template #default="{ row }">
-            <el-tag :type="row.result === 'success' ? 'success' : 'danger'" size="small">
-              {{ row.result === 'success' ? '成功' : '失败' }}
+            <el-tag
+              :type="row.result === 'success' ? 'success' : 'danger'"
+              size="small"
+            >
+              {{ row.result === "success" ? "成功" : "失败" }}
             </el-tag>
           </template>
         </el-table-column>
         <el-table-column prop="ip" label="来源 IP" width="140" />
         <el-table-column label="时间" width="180">
           <template #default="{ row }">
-            {{ row.createdAt ? new Date(row.createdAt).toLocaleString('zh-CN', { hour12: false }) : '--' }}
+            {{
+              row.createdAt
+                ? new Date(row.createdAt).toLocaleString("zh-CN", {
+                    hour12: false,
+                  })
+                : "--"
+            }}
           </template>
         </el-table-column>
       </el-table>

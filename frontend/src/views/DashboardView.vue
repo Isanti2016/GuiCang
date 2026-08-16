@@ -1,129 +1,139 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref } from 'vue'
-import { fetchDashboardSummary, type DashboardSummary } from '@/api/dashboard'
-import { fetchOverview, fetchSeries, type HostMetrics, type SeriesPoint } from '@/api/monitor'
-import { useECharts } from '@/composables/useECharts'
+import { computed, onBeforeUnmount, ref } from "vue";
+import { fetchDashboardSummary, type DashboardSummary } from "@/api/dashboard";
+import {
+  fetchOverview,
+  fetchSeries,
+  type HostMetrics,
+  type SeriesPoint,
+} from "@/api/monitor";
+import { useECharts } from "@/composables/useECharts";
 
-const summary = ref<DashboardSummary | null>(null)
-const overview = ref<HostMetrics | null>(null)
+const summary = ref<DashboardSummary | null>(null);
+const overview = ref<HostMetrics | null>(null);
 
-const trendRef = ref<HTMLElement | null>(null)
-const diskRef = ref<HTMLElement | null>(null)
-const { setOption: setTrendOption } = useECharts(trendRef)
-const { setOption: setDiskOption } = useECharts(diskRef)
-
+const trendRef = ref<HTMLElement | null>(null);
+const diskRef = ref<HTMLElement | null>(null);
+const { setOption: setTrendOption } = useECharts(trendRef);
+const { setOption: setDiskOption } = useECharts(diskRef);
 
 const formatBytes = (kb: number): string => {
-  if (kb <= 0) return '0 B'
-  const units = ['KB', 'MB', 'GB', 'TB']
-  let value = kb
-  let unit = 0
+  if (kb <= 0) return "0 B";
+  const units = ["KB", "MB", "GB", "TB"];
+  let value = kb;
+  let unit = 0;
   while (value >= 1024 && unit < units.length - 1) {
-    value /= 1024
-    unit += 1
+    value /= 1024;
+    unit += 1;
   }
-  return `${value.toFixed(1)} ${units[unit]}`
-}
+  return `${value.toFixed(1)} ${units[unit]}`;
+};
 
-const formatPercent = (value: number): string => `${value.toFixed(1)}%`
+const formatPercent = (value: number): string => `${value.toFixed(1)}%`;
 
-const diskTotal = computed(() => formatBytes(summary.value?.diskTotalKb ?? 0))
-const diskAvail = computed(() => formatBytes(summary.value?.diskAvailKb ?? 0))
-const diskUsedPercent = computed(() => summary.value?.diskUsedPercent ?? 0)
+const diskTotal = computed(() => formatBytes(summary.value?.diskTotalKb ?? 0));
+const diskAvail = computed(() => formatBytes(summary.value?.diskAvailKb ?? 0));
+const diskUsedPercent = computed(() => summary.value?.diskUsedPercent ?? 0);
 const memPercent = computed(() => {
-  const m = overview.value
-  if (!m || m.memTotalKb <= 0) return 0
-  return ((m.memTotalKb - m.memAvailKb) * 100) / m.memTotalKb
-})
-const cpuPercent = computed(() => overview.value?.cpu ?? 0)
-const loadAvg = computed(() => (overview.value ? `${overview.value.load1} / ${overview.value.load5} / ${overview.value.load15}` : '--'))
+  const m = overview.value;
+  if (!m || m.memTotalKb <= 0) return 0;
+  return ((m.memTotalKb - m.memAvailKb) * 100) / m.memTotalKb;
+});
+const cpuPercent = computed(() => overview.value?.cpu ?? 0);
+const loadAvg = computed(() =>
+  overview.value
+    ? `${overview.value.load1} / ${overview.value.load5} / ${overview.value.load15}`
+    : "--",
+);
 
 function renderTrend(points: SeriesPoint[]): void {
   setTrendOption({
-    tooltip: { trigger: 'axis' },
+    tooltip: { trigger: "axis" },
     grid: { left: 40, right: 16, top: 16, bottom: 28 },
     xAxis: {
-      type: 'category',
-      data: points.map((p) => new Date(p.timestamp).toLocaleTimeString('zh-CN', { hour12: false })),
+      type: "category",
+      data: points.map((p) =>
+        new Date(p.timestamp).toLocaleTimeString("zh-CN", { hour12: false }),
+      ),
     },
-    yAxis: { type: 'value', axisLabel: { formatter: '{value}%' } },
+    yAxis: { type: "value", axisLabel: { formatter: "{value}%" } },
     series: [
       {
-        name: 'CPU 使用率',
-        type: 'line',
+        name: "CPU 使用率",
+        type: "line",
         smooth: true,
         data: points.map((p) => p.value),
         areaStyle: { opacity: 0.15 },
       },
     ],
-  })
+  });
 }
 
 function renderDisk(): void {
-  const s = summary.value
-  if (!s) return
+  const s = summary.value;
+  if (!s) return;
   setDiskOption({
-    tooltip: { trigger: 'item', formatter: '{b}: {c}%' },
+    tooltip: { trigger: "item", formatter: "{b}: {c}%" },
     series: [
       {
-        type: 'pie',
-        radius: ['55%', '75%'],
-        label: { formatter: '{b}: {c}%' },
+        type: "pie",
+        radius: ["55%", "75%"],
+        label: { formatter: "{b}: {c}%" },
         data: [
-          { name: '已用', value: s.diskUsedPercent },
-          { name: '可用', value: 100 - s.diskUsedPercent },
+          { name: "已用", value: s.diskUsedPercent },
+          { name: "可用", value: 100 - s.diskUsedPercent },
         ],
-        color: ['#409eff', '#67c23a'],
+        color: ["#409eff", "#67c23a"],
       },
     ],
-  })
+  });
 }
 
 async function loadData(): Promise<void> {
   try {
-    summary.value = await fetchDashboardSummary()
-    renderDisk()
+    summary.value = await fetchDashboardSummary();
+    renderDisk();
   } catch {
     // 错误提示由拦截器处理
   }
   try {
-    overview.value = await fetchOverview()
+    overview.value = await fetchOverview();
   } catch {
     // 忽略
   }
   try {
-    const points = await fetchSeries('cpu', 'fine')
-    renderTrend(points)
+    const points = await fetchSeries("cpu", "fine");
+    renderTrend(points);
   } catch {
     // 忽略
   }
 }
 
-void loadData()
-const pollTimer = setInterval(loadData, 30000)
+void loadData();
+const pollTimer = setInterval(loadData, 30000);
 
 onBeforeUnmount(() => {
-  if (pollTimer) clearInterval(pollTimer)
-})
+  if (pollTimer) clearInterval(pollTimer);
+});
 
-const recentOperations = computed(() => summary.value?.recentOperations ?? [])
+const recentOperations = computed(() => summary.value?.recentOperations ?? []);
 const actionLabel = (action: string): string => {
   const labels: Record<string, string> = {
-    login: '登录',
-    'setup.init': '系统初始化',
-    'user.create': '新建用户',
-    'user.delete': '删除用户',
-    'user.status': '用户状态',
-    'user.password': '重置密码',
-    'file.upload': '上传',
-    'file.write': '编辑文件',
-    'file.mkdir': '新建目录',
-    'file.rename': '重命名',
-    'file.move': '移动',
-    'file.delete': '删除',
-  }
-  return labels[action] ?? action
-}
+    login: "登录",
+    "setup.init": "系统初始化",
+    "user.create": "新建用户",
+    "user.delete": "删除用户",
+    "user.status": "用户状态",
+    "user.password": "重置密码",
+    "file.upload": "上传",
+    "file.write": "编辑文件",
+    "file.mkdir": "新建目录",
+    "file.rename": "重命名",
+    "file.move": "移动",
+    "file.delete": "删除",
+  };
+  return labels[action] ?? action;
+};
 </script>
 
 <template>
@@ -133,9 +143,18 @@ const actionLabel = (action: string): string => {
         <el-card shadow="hover">
           <div class="stat-card">
             <div class="stat-card__label">磁盘已用</div>
-            <div class="stat-card__value">{{ formatPercent(diskUsedPercent) }}</div>
+            <div class="stat-card__value">
+              {{ formatPercent(diskUsedPercent) }}
+            </div>
             <div class="stat-card__extra">
-              已用 {{ formatBytes(summary?.diskTotalKb ? summary.diskTotalKb - summary.diskAvailKb : 0) }}
+              已用
+              {{
+                formatBytes(
+                  summary?.diskTotalKb
+                    ? summary.diskTotalKb - summary.diskAvailKb
+                    : 0,
+                )
+              }}
               / 共 {{ diskTotal }} · 可用 {{ diskAvail }}
             </div>
           </div>
@@ -155,7 +174,9 @@ const actionLabel = (action: string): string => {
           <div class="stat-card">
             <div class="stat-card__label">内存使用率</div>
             <div class="stat-card__value">{{ formatPercent(memPercent) }}</div>
-            <div class="stat-card__extra">可用 {{ formatBytes(overview?.memAvailKb ?? 0) }}</div>
+            <div class="stat-card__extra">
+              可用 {{ formatBytes(overview?.memAvailKb ?? 0) }}
+            </div>
           </div>
         </el-card>
       </el-col>
@@ -167,7 +188,9 @@ const actionLabel = (action: string): string => {
               {{ summary?.fileTotal ?? 0 }} / {{ summary?.userTotal ?? 0 }}
             </div>
             <div class="stat-card__extra">
-              图片 {{ summary?.fileImages ?? 0 }} · 视频 {{ summary?.fileVideos ?? 0 }} · 文档 {{ summary?.fileNotes ?? 0 }}
+              图片 {{ summary?.fileImages ?? 0 }} · 视频
+              {{ summary?.fileVideos ?? 0 }} · 文档
+              {{ summary?.fileNotes ?? 0 }}
             </div>
           </div>
         </el-card>
@@ -196,14 +219,23 @@ const actionLabel = (action: string): string => {
         <el-table-column prop="resource" label="对象" show-overflow-tooltip />
         <el-table-column prop="result" label="结果" width="90">
           <template #default="{ row }">
-            <el-tag :type="row.result === 'success' ? 'success' : 'danger'" size="small">
-              {{ row.result === 'success' ? '成功' : '失败' }}
+            <el-tag
+              :type="row.result === 'success' ? 'success' : 'danger'"
+              size="small"
+            >
+              {{ row.result === "success" ? "成功" : "失败" }}
             </el-tag>
           </template>
         </el-table-column>
         <el-table-column label="时间" width="180">
           <template #default="{ row }">
-            {{ row.createdAt ? new Date(row.createdAt).toLocaleString('zh-CN', { hour12: false }) : '--' }}
+            {{
+              row.createdAt
+                ? new Date(row.createdAt).toLocaleString("zh-CN", {
+                    hour12: false,
+                  })
+                : "--"
+            }}
           </template>
         </el-table-column>
       </el-table>

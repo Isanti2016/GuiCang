@@ -1,29 +1,29 @@
 <script setup lang="ts">
-import { computed, onMounted } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
-import { useAuthStore } from '@/stores/auth'
+import { computed, onMounted } from "vue";
+import { useRoute, useRouter } from "vue-router";
+import { useAuthStore } from "@/stores/auth";
 
-const route = useRoute()
-const router = useRouter()
-const authStore = useAuthStore()
+const route = useRoute();
+const router = useRouter();
+const authStore = useAuthStore();
 
-const title = computed(() => (route.meta.title as string) || '归藏 NAS')
-const username = computed(() => authStore.user?.username ?? '')
-const isAdmin = computed(() => authStore.isAdmin())
+const title = computed(() => (route.meta.title as string) || "归藏 NAS");
+const username = computed(() => authStore.user?.username ?? "");
+const isAdmin = computed(() => authStore.isAdmin());
 
 const menus = computed(() => {
   const items = [
-    { path: '/dashboard', title: '监控大屏', icon: 'Odometer' },
-    { path: '/files', title: '文件管理', icon: 'Folder' },
-    { path: '/sync', title: '同步任务', icon: 'Clock', adminOnly: true },
-    { path: '/audit', title: '操作记录', icon: 'List', adminOnly: true },
-  ]
-  return items.filter((item) => !item.adminOnly || isAdmin.value)
-})
+    { path: "/dashboard", title: "监控大屏", icon: "Odometer" },
+    { path: "/files", title: "文件管理", icon: "Folder" },
+    { path: "/sync", title: "同步任务", icon: "Clock", adminOnly: true },
+    { path: "/audit", title: "操作记录", icon: "List", adminOnly: true },
+  ];
+  return items.filter((item) => !item.adminOnly || isAdmin.value);
+});
 
 async function handleLogout(): Promise<void> {
-  await authStore.logout()
-  await router.replace('/login')
+  await authStore.logout();
+  await router.replace("/login");
 }
 
 onMounted(() => {
@@ -31,9 +31,9 @@ onMounted(() => {
   if (authStore.token && !authStore.user) {
     void authStore.fetchCurrentUser().catch(() => {
       // 失败由拦截器处理（401 会跳登录）
-    })
+    });
   }
-})
+});
 </script>
 
 <template>
@@ -51,7 +51,9 @@ onMounted(() => {
     <el-container>
       <el-header class="main-layout__header">
         <span class="main-layout__title">{{ title }}</span>
-        <el-dropdown @command="(cmd: string) => cmd === 'logout' && handleLogout()">
+        <el-dropdown
+          @command="(cmd: string) => cmd === 'logout' && handleLogout()"
+        >
           <span class="main-layout__user">
             {{ username }}
             <el-icon><ArrowDown /></el-icon>
