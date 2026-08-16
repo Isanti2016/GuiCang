@@ -1,0 +1,103 @@
+package com.guicang.nas.module.dashboard;
+
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.guicang.nas.infra.monitor.HostMetrics;
+import com.guicang.nas.module.audit.AuditLog;
+import com.guicang.nas.module.audit.AuditLogMapper;
+import com.guicang.nas.module.dashboard.DashboardSummary.RecentOperation;
+import com.guicang.nas.module.file.FileIndex;
+import com.guicang.nas.module.file.FileIndexMapper;
+import com.guicang.nas.module.monitor.MetricsService;
+import com.guicang.nas.module.user.SysUser;
+import com.guicang.nas.module.user.SysUserMapper;
+import java.util.EnumMap;
+import java.util.List;
+import java.util.Map;
+import org.springframework.stereotype.Service;
+
+/** 大屏聚合服务实现：磁盘、文件索引统计、用户数、最近审计操作。 */
+@Service
+public class DashboardServiceImpl implements DashboardService {
+
+  private final MetricsService metricsService;
+  private final FileIndexMapper fileIndexMapper;
+  private final SysUserMapper sysUserMapper;
+  private final AuditLogMapper auditLogMapper;
+
+  public DashboardServiceImpl(
+      MetricsService metricsService,
+      FileIndexMapper fileIndexMapper,
+      SysUserMapper sysUserMapper,
+      AuditLogMapper auditLogMapper) {
+    this.metricsService = metricsService;
+    this.fileIndexMapper = fileIndexMapper;
+    this.sysUserMapper = sysUserMapper;
+    this.auditLogMapper = auditLogMapper;
+  }
+
+  @Override
+  public DashboardSummary summary() {
+    HostMetrics latest = metricsService.latest();
+    long diskTotal = latest == null ? 0 : latest.diskTotalKb();
+    long diskAvail = latest == null ? 0 : latest.diskAvailKb();
+    long diskUsedPercent = diskTotal > 0 ? (diskTotal - diskAvail) * 100 / diskTotal : 0;
+
+    Map<String, Long> kindCounts = countByKind();
+    long userTotal = sysUserMapper.selectCount(null);
+    long userEnabled =
+        sysUserMapper.selectCount(new LambdaQueryWrapper<SysUser>().eq(SysUser::getEnabled, 1));
+
+    List<RecentOperation> recent =
+        auditLogMapper
+            .selectList(
+                new LambdaQueryWrapper<AuditLog>().orderByDesc(AuditLog::getId).last("LIMIT 10"))
+            .stream()
+            .map(
+                a ->
+                    new RecentOperation(
+                        a.getId(),
+                        a.getUsername(),
+                        a.getAction(),
+                        a.getResource(),
+                        a.getResult(),
+                        a.getCreatedAt()))
+            .toList();
+
+    return new DashboardSummary(
+        diskTotal,
+        diskAvail,
+        diskUsedPercent,
+        kindCounts.values().stream().mapToLong(Long::longValue).sum(),
+        kindCounts.getOrDefault("dir", 0L),
+        kindCounts.getOrDefault("image", 0L),
+        kindCounts.getOrDefault("video", 0L),
+        kindCounts.getOrDefault("note", 0L),
+        userTotal,
+        userEnabled,
+        recent);
+  }
+
+  private Map<String, Long> countByKind() {
+    Map<String, Long> counts =
+        new EnumMap<>(Kind.class)
+            .entrySet().stream()
+                .collect(java.util.stream.Collectors.toMap(e -> e.getKey().code, e -> 0L));
+    fileIndexMapper
+        .selectList(new LambdaQueryWrapper<FileIndex>().select(FileIndex::getKind))
+        .forEach(idx -> counts.merge(idx.getKind(), 1L, Long::sum));
+    return counts;
+  }
+
+  private enum Kind {
+    DIR("dir"),
+    IMAGE("image"),
+    VIDEO("video"),
+    NOTE("note");
+
+    final String code;
+
+    Kind(String code) {
+      this.code = code;
+    }
+  }
+}
