@@ -77,4 +77,22 @@ class GlobalExceptionHandlerTest {
         .andExpect(jsonPath("$.code").value(500))
         .andExpect(jsonPath("$.message").value("系统繁忙，请稍后重试"));
   }
+
+  @Test
+  void 方法不支持返回405统一结构() throws Exception {
+    mockMvc
+        .perform(get("/test/post-only"))
+        .andExpect(status().isMethodNotAllowed())
+        .andExpect(jsonPath("$.code").value(405))
+        .andExpect(jsonPath("$.message").value("请求方法不支持: GET"));
+  }
+
+  @Test
+  void 缺少必填参数返回400() throws Exception {
+    mockMvc
+        .perform(get("/test/need-param"))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.code").value(400))
+        .andExpect(jsonPath("$.message").value("缺少请求参数: name"));
+  }
 }

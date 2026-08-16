@@ -172,6 +172,117 @@ class UserManagementTest {
         .andExpect(jsonPath("$.data.roles[0]").value("ROLE_MEMBER"));
   }
 
+  @Test
+  void 更新不存在的用户被拒() throws Exception {
+    mockMvc
+        .perform(
+            put("/api/v1/users/ghost")
+                .header("Authorization", bearer(adminToken))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(
+                    "{\"displayName\":\"幽灵\",\"email\":null,\"roleId\":2,\"quotaBytes\":null}"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.code").value(ResultCodes.BIZ_ERROR))
+        .andExpect(jsonPath("$.message").value("用户不存在: ghost"));
+  }
+
+  @Test
+  void 删除不存在的用户被拒() throws Exception {
+    mockMvc
+        .perform(
+            org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete(
+                    "/api/v1/users/ghost")
+                .header("Authorization", bearer(adminToken)))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.code").value(ResultCodes.BIZ_ERROR))
+        .andExpect(jsonPath("$.message").value("用户不存在: ghost"));
+  }
+
+  @Test
+  void 创建用户时角色不存在被拒() throws Exception {
+    when(systemAccountProvisioner.createUser(eq("frank"), anyString()))
+        .thenReturn(ProvisionResult.created(1010L));
+    mockMvc
+        .perform(
+            post("/api/v1/users")
+                .header("Authorization", bearer(adminToken))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(
+                    "{\"username\":\"frank\",\"displayName\":\"弗兰克\","
+                        + "\"password\":\"FrankPass-2026!\",\"roleId\":999}"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.code").value(ResultCodes.BIZ_ERROR))
+        .andExpect(jsonPath("$.message").value("角色不存在: id=999"));
+  }
+
+  @Test
+  void helper失败时停用用户被拒() throws Exception {
+    when(systemAccountProvisioner.setUserStatus(eq("bob"), eq(false)))
+        .thenReturn(ProvisionResult.failed("helper 失败"));
+    mockMvc
+        .perform(
+            put("/api/v1/users/bob/status")
+                .header("Authorization", bearer(adminToken))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"enabled\":false}"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.code").value(ResultCodes.BIZ_ERROR))
+        .andExpect(jsonPath("$.message").value("系统账号状态变更失败: helper 失败"));
+  }
+
+  @Test
+  void helper未部署时重置密码被拒() throws Exception {
+    when(systemAccountProvisioner.setUserPassword(eq("bob"), anyString()))
+        .thenReturn(ProvisionResult.pending("未部署"));
+    mockMvc
+        .perform(
+            put("/api/v1/users/bob/password")
+                .header("Authorization", bearer(adminToken))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"password\":\"NewBobPass-2026!\"}"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.code").value(ResultCodes.BIZ_ERROR))
+        .andExpect(jsonPath("$.message").value("密码重置失败（guicang-helper 未部署）"));
+  }
+
+  @Test
+  void helper失败时删除用户被拒() throws Exception {
+    when(systemAccountProvisioner.deleteUser(eq("bob"), eq(false)))
+        .thenReturn(ProvisionResult.failed("helper 失败"));
+    mockMvc
+        .perform(
+            org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete(
+                    "/api/v1/users/bob")
+                .header("Authorization", bearer(adminToken)))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.code").value(ResultCodes.BIZ_ERROR))
+        .andExpect(jsonPath("$.message").value("系统账号删除失败: helper 失败"));
+  }
+
+  @Test
+  void 列表关键字筛选() throws Exception {
+    mockMvc
+        .perform(
+            get("/api/v1/users")
+                .param("keyword", "bob")
+                .header("Authorization", bearer(adminToken)))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.code").value(ResultCodes.SUCCESS))
+        .andExpect(jsonPath("$.data[0].username").value("bob"));
+  }
+
+  @Test
+  void 内置admin不可删除() throws Exception {
+    mockMvc
+        .perform(
+            org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete(
+                    "/api/v1/users/admin")
+                .header("Authorization", bearer(adminToken)))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.code").value(ResultCodes.BIZ_ERROR))
+        .andExpect(jsonPath("$.message").value("内置 admin 账号不可删除"));
+  }
+
   private void insertUser(String username, String displayName, Long roleId, int enabled) {
     sysUserMapper.delete(new LambdaQueryWrapper<SysUser>().eq(SysUser::getUsername, username));
     SysUser user = new SysUser();
