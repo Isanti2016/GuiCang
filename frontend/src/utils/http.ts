@@ -84,8 +84,8 @@ export async function post<T>(url: string, body?: unknown): Promise<T> {
 }
 
 /** PUT 请求返回 data。 */
-export async function put<T>(url: string, body?: unknown): Promise<T> {
-  const response = await http.put<ApiResult<T>>(url, body)
+export async function put<T>(url: string, body?: unknown, params?: Record<string, unknown>): Promise<T> {
+  const response = await http.put<ApiResult<T>>(url, body, { params })
   return response.data.data
 }
 

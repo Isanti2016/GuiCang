@@ -17,7 +17,25 @@ const routes: RouteRecordRaw[] = [
         path: 'dashboard',
         name: 'dashboard',
         component: () => import('@/views/DashboardView.vue'),
-        meta: { title: '大屏' },
+        meta: { title: '监控大屏' },
+      },
+      {
+        path: 'files',
+        name: 'files',
+        component: () => import('@/views/FileView.vue'),
+        meta: { title: '文件管理' },
+      },
+      {
+        path: 'sync',
+        name: 'sync',
+        component: () => import('@/views/SyncView.vue'),
+        meta: { title: '同步任务', adminOnly: true },
+      },
+      {
+        path: 'audit',
+        name: 'audit',
+        component: () => import('@/views/AuditView.vue'),
+        meta: { title: '操作记录', adminOnly: true },
       },
     ],
   },
@@ -29,7 +47,7 @@ const router = createRouter({
   routes,
 })
 
-// 路由守卫：未登录跳 /login
+// 路由守卫：未登录跳 /login；adminOnly 路由需 ROLE_ADMIN
 router.beforeEach((to) => {
   const authenticated = Boolean(getToken())
   if (!to.meta.public && !authenticated) {
