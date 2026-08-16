@@ -16,3 +16,6 @@
 
 ## 开发约束
 所有编码遵循 AGENTS.md 与 docs/AI规则与编码规范.md；提交信息用中文 Conventional Commits。
+
+## 交接
+新对话开始工作前请先阅读 HANDOFF.md。
