@@ -30,6 +30,24 @@ const routes: RouteRecordRaw[] = [
         meta: { title: "文件管理" },
       },
       {
+        path: "admin/users",
+        name: "admin-users",
+        component: () => import("@/views/UserView.vue"),
+        meta: { title: "用户管理", adminOnly: true },
+      },
+      {
+        path: "admin/roles",
+        name: "admin-roles",
+        component: () => import("@/views/RoleView.vue"),
+        meta: { title: "角色与权限", adminOnly: true },
+      },
+      {
+        path: "help",
+        name: "help",
+        component: () => import("@/views/HelpView.vue"),
+        meta: { title: "使用手册" },
+      },
+      {
         path: "sync",
         name: "sync",
         component: () => import("@/views/SyncView.vue"),

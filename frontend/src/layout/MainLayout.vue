@@ -15,6 +15,9 @@ const menus = computed(() => {
   const items = [
     { path: "/dashboard", title: "监控大屏", icon: "Odometer" },
     { path: "/files", title: "文件管理", icon: "Folder" },
+    { path: "/help", title: "使用手册", icon: "Reading" },
+    { path: "/admin/users", title: "用户管理", icon: "User", adminOnly: true },
+    { path: "/admin/roles", title: "角色与权限", icon: "Lock", adminOnly: true },
     { path: "/sync", title: "同步任务", icon: "Clock", adminOnly: true },
     { path: "/audit", title: "操作记录", icon: "List", adminOnly: true },
   ];
@@ -79,7 +82,22 @@ onMounted(() => {
 }
 
 .main-layout__aside {
-  background: #001529;
+  background:
+    linear-gradient(180deg, rgba(4, 8, 26, 0.96) 0%, rgba(2, 6, 18, 0.96) 100%);
+  border-right: 1px solid rgba(0, 224, 255, 0.16);
+  position: relative;
+}
+
+.main-layout__aside::after {
+  /* 侧栏细网格点缀 */
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image:
+    linear-gradient(rgba(64, 158, 255, 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(64, 158, 255, 0.05) 1px, transparent 1px);
+  background-size: 26px 26px;
 }
 
 .main-layout__brand {
@@ -87,17 +105,20 @@ onMounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #fff;
+  color: #eaf4ff;
   font-size: 18px;
   font-weight: 600;
+  letter-spacing: 2px;
+  text-shadow: 0 0 14px rgba(0, 224, 255, 0.55);
+  border-bottom: 1px solid rgba(0, 224, 255, 0.12);
 }
 
 .main-layout__menu {
   border-right: none;
   background: transparent;
-  --el-menu-text-color: #b3b3b3;
-  --el-menu-hover-bg-color: rgba(255, 255, 255, 0.08);
-  --el-menu-active-color: #fff;
+  --el-menu-text-color: #9fc3ff;
+  --el-menu-hover-bg-color: rgba(64, 158, 255, 0.12);
+  --el-menu-active-color: #00e0ff;
   --el-menu-bg-color: transparent;
 }
 
@@ -105,12 +126,15 @@ onMounted(() => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  border-bottom: 1px solid var(--el-border-color-light);
+  background: rgba(6, 12, 28, 0.6);
+  border-bottom: 1px solid rgba(0, 224, 255, 0.14);
+  backdrop-filter: blur(6px);
 }
 
 .main-layout__title {
   font-size: 16px;
   font-weight: 500;
+  color: #d7e3f4;
 }
 
 .main-layout__user {
@@ -118,9 +142,12 @@ onMounted(() => {
   align-items: center;
   gap: 4px;
   cursor: pointer;
+  color: #9fc3ff;
 }
 
 .main-layout__content {
-  background: #f5f7fa;
+  /* 内容区透明，由全局深色科技背景承接 */
+  background: transparent;
+  padding: 16px;
 }
 </style>

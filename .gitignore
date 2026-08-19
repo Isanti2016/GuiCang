@@ -35,3 +35,6 @@ Thumbs.db
 # Python
 __pycache__/
 *.pyc
+
+# DSH 环境注入（非本项目）
+.dsh-routing-suite-install/
