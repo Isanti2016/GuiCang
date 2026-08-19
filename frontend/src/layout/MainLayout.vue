@@ -99,8 +99,8 @@ onMounted(() => {
 }
 
 .main-layout__aside {
-  background: linear-gradient(180deg, #ffffff 0%, #e9f2fd 100%);
-  border-right: 1px solid rgba(64, 158, 255, 0.2);
+  background: linear-gradient(180deg, rgba(6, 18, 40, 0.92) 0%, rgba(3, 12, 28, 0.94) 100%);
+  border-right: 1px solid rgba(212, 175, 55, 0.35);
   position: relative;
 }
 
@@ -111,8 +111,8 @@ onMounted(() => {
   inset: 0;
   pointer-events: none;
   background-image:
-    linear-gradient(rgba(64, 158, 255, 0.05) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(64, 158, 255, 0.05) 1px, transparent 1px);
+    linear-gradient(rgba(126, 210, 255, 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(126, 210, 255, 0.05) 1px, transparent 1px);
   background-size: 26px 26px;
 }
 
@@ -121,35 +121,52 @@ onMounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #1f4e8c;
+  color: #eaf6ff;
   font-size: 18px;
   font-weight: 600;
   letter-spacing: 2px;
-  border-bottom: 1px solid rgba(64, 158, 255, 0.18);
+  text-shadow: 0 0 14px rgba(110, 200, 255, 0.5);
+  border-bottom: 1px solid rgba(212, 175, 55, 0.4);
 }
 
 .main-layout__menu {
   border-right: none;
   background: transparent;
-  --el-menu-text-color: #2b3a4a;
-  --el-menu-hover-bg-color: rgba(64, 158, 255, 0.1);
-  --el-menu-active-color: #1f4e8c;
+  --el-menu-text-color: #9fc6ea;
+  --el-menu-hover-bg-color: rgba(110, 200, 255, 0.1);
+  --el-menu-active-color: #bfe9ff;
   --el-menu-bg-color: transparent;
+}
+
+.main-layout__menu :deep(.el-menu-item.is-active) {
+  position: relative;
+}
+
+.main-layout__menu :deep(.el-menu-item.is-active)::before {
+  /* 金色细线指示 */
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 20%;
+  bottom: 20%;
+  width: 2px;
+  background: linear-gradient(180deg, rgba(212, 175, 55, 0.95), rgba(212, 175, 55, 0.4));
+  border-radius: 1px;
 }
 
 .main-layout__header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  background: rgba(255, 255, 255, 0.72);
-  border-bottom: 1px solid rgba(64, 158, 255, 0.2);
+  background: rgba(5, 16, 36, 0.66);
+  border-bottom: 1px solid rgba(212, 175, 55, 0.3);
   backdrop-filter: blur(6px);
 }
 
 .main-layout__title {
   font-size: 16px;
   font-weight: 500;
-  color: #1f4e8c;
+  color: #bfe9ff;
 }
 
 .main-layout__user {
@@ -157,7 +174,7 @@ onMounted(() => {
   align-items: center;
   gap: 4px;
   cursor: pointer;
-  color: #1f4e8c;
+  color: #bfe9ff;
 }
 
 .main-layout__content {

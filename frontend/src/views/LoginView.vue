@@ -47,7 +47,9 @@ async function handleLogin(): Promise<void> {
 
     <el-card class="login-card">
       <div class="login-card__logo">
-        <el-icon :size="40" color="#00e0ff"><Cpu /></el-icon>
+        <span class="login-card__logo-ring">
+          <el-icon :size="40" color="#bfe9ff"><Cpu /></el-icon>
+        </span>
       </div>
       <h1 class="login-card__title">GuiCang 归藏</h1>
       <p class="login-card__subtitle">家庭 NAS 管理系统 · 科技中枢</p>
@@ -88,7 +90,7 @@ async function handleLogin(): Promise<void> {
   justify-content: center;
   overflow: hidden;
   background:
-    linear-gradient(rgba(255, 255, 255, 0.5), rgba(255, 255, 255, 0.58)),
+    linear-gradient(rgba(6, 16, 38, 0.55), rgba(4, 12, 28, 0.7)),
     url("/backgrounds/bg-login.jpg") center / cover no-repeat;
 }
 
@@ -99,7 +101,7 @@ async function handleLogin(): Promise<void> {
   left: 0;
   right: 0;
   height: 3px;
-  background: linear-gradient(90deg, transparent, rgba(110, 175, 255, 0.7), transparent);
+  background: linear-gradient(90deg, transparent, rgba(212, 175, 55, 0.85), transparent);
   animation: gc-scan 4s ease-in-out infinite;
   opacity: 0.8;
 }
@@ -121,13 +123,14 @@ async function handleLogin(): Promise<void> {
   position: relative;
   width: 400px;
   padding: 8px 8px 4px;
-  background: rgba(255, 255, 255, 0.92) !important;
-  border: 1px solid rgba(64, 158, 255, 0.35) !important;
+  background: rgba(7, 22, 46, 0.78) !important;
+  border: 1px solid rgba(212, 175, 55, 0.55) !important;
   border-radius: 12px;
   box-shadow:
-    0 0 24px rgba(64, 158, 255, 0.18),
-    0 12px 40px rgba(64, 158, 255, 0.15);
-  backdrop-filter: blur(8px);
+    0 0 0 1px rgba(140, 220, 255, 0.12),
+    0 0 28px rgba(110, 200, 255, 0.16),
+    0 14px 48px rgba(2, 8, 20, 0.6);
+  backdrop-filter: blur(10px);
 }
 
 .login-card__logo {
@@ -136,19 +139,44 @@ async function handleLogin(): Promise<void> {
   margin-bottom: 6px;
 }
 
+.login-card__logo-ring {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  border: 1px solid rgba(212, 175, 55, 0.65);
+  box-shadow: 0 0 18px rgba(110, 200, 255, 0.25);
+}
+
 .login-card__title {
-  margin: 0;
+  margin: 10px 0 0;
   font-size: 26px;
   text-align: center;
   letter-spacing: 4px;
-  color: #1f4e8c;
-  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.6);
+  color: #eaf6ff;
+  text-shadow: 0 0 16px rgba(110, 200, 255, 0.45);
+  padding-bottom: 10px;
+  position: relative;
+}
+
+.login-card__title::after {
+  /* 金色细线点缀 */
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: 0;
+  transform: translateX(-50%);
+  width: 120px;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(212, 175, 55, 0.9), transparent);
 }
 
 .login-card__subtitle {
   margin: 8px 0 22px;
   text-align: center;
-  color: var(--el-text-color-secondary);
+  color: #8fb6dd;
   font-size: 13px;
   letter-spacing: 2px;
 }
@@ -160,7 +188,7 @@ async function handleLogin(): Promise<void> {
 .login-card__hint {
   margin: 14px 0 4px;
   text-align: center;
-  color: rgba(31, 78, 140, 0.55);
+  color: rgba(143, 182, 221, 0.65);
   font-size: 12px;
 }
 </style>

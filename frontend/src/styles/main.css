@@ -26,37 +26,70 @@ body {
     sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  color: #2b3a4a;
-  /* 主界面背景：美景图 + 半透明白遮罩（图由 TechBackground 玻璃面板点缀） */
-  background-color: #d9e6f6;
+  color: #eaf6ff;
+  /* 深海鲸语：主界面背景图 + 深蓝半透明遮罩 */
+  background-color: #04101f;
   background-image:
-    linear-gradient(rgba(255, 255, 255, 0.6), rgba(255, 255, 255, 0.62)),
+    linear-gradient(rgba(6, 18, 40, 0.6), rgba(4, 12, 28, 0.72)),
     url("/backgrounds/bg-main.jpg");
   background-size: cover;
   background-position: center;
   background-attachment: fixed;
 }
 
-/* 卡片：白色半透明 + 浅蓝描边 + 柔和阴影 */
-.el-card {
-  background: rgba(255, 255, 255, 0.86);
-  border: 1px solid rgba(64, 158, 255, 0.22);
-  box-shadow: 0 6px 24px rgba(64, 158, 255, 0.12);
+/* ============ 冰蓝海洋调色板（Element Plus dark 覆盖） ============ */
+html.dark {
+  --el-bg-color: rgba(8, 24, 50, 0.82);
+  --el-bg-color-overlay: rgba(8, 24, 50, 0.96);
+  --el-fill-color-blank: rgba(8, 24, 50, 0.55);
+  --el-border-color: rgba(140, 220, 255, 0.16);
+  --el-border-color-light: rgba(140, 220, 255, 0.12);
+  --el-text-color-primary: #eaf6ff;
+  --el-text-color-regular: #bfdcf8;
+  --el-text-color-secondary: #8fb6dd;
+  --el-color-primary: #6ec8ff;
 }
 
-.el-table th.el-table__cell {
-  background: rgba(64, 158, 255, 0.08);
-  color: #1f4e8c;
+/* 卡片：深海玻璃 + 金色细线点缀 */
+html.dark .el-card {
+  background: rgba(7, 22, 46, 0.72);
+  border: 1px solid rgba(212, 175, 55, 0.45);
+  box-shadow:
+    0 0 0 1px rgba(140, 220, 255, 0.1),
+    0 8px 32px rgba(2, 8, 20, 0.5);
+  backdrop-filter: blur(8px);
 }
 
-/* 科技感点缀：滚动条 */
+/* 表格：冰蓝表头 + 金色细下划线 */
+html.dark .el-table {
+  --el-table-bg-color: transparent;
+  --el-table-tr-bg-color: transparent;
+  --el-table-header-bg-color: rgba(20, 48, 88, 0.6);
+}
+
+html.dark .el-table th.el-table__cell {
+  color: #bfe9ff;
+  border-bottom: 1px solid rgba(212, 175, 55, 0.4);
+}
+
+html.dark .el-table td.el-table__cell {
+  border-bottom: 1px solid rgba(140, 220, 255, 0.08);
+}
+
+html.dark .el-input__wrapper,
+html.dark .el-textarea__inner {
+  background-color: rgba(10, 30, 60, 0.6);
+  box-shadow: 0 0 0 1px rgba(140, 220, 255, 0.18) inset;
+}
+
+/* 金色细线滚动条 */
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(64, 158, 255, 0.3);
+  background: linear-gradient(rgba(212, 175, 55, 0.5), rgba(110, 200, 255, 0.4));
   border-radius: 4px;
 }
 
