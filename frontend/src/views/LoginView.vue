@@ -2,6 +2,7 @@
 import { reactive, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { ElMessage, type FormInstance, type FormRules } from "element-plus";
+import TechBackground from "@/components/TechBackground.vue";
 import { useAuthStore } from "@/stores/auth";
 
 const router = useRouter();
@@ -41,12 +42,8 @@ async function handleLogin(): Promise<void> {
 
 <template>
   <div class="login-page">
-    <!-- 透视科技网格 -->
-    <div class="login-page__grid" />
-    <!-- 浮动光晕 -->
-    <div class="login-page__orb login-page__orb--1" />
-    <div class="login-page__orb login-page__orb--2" />
-    <div class="login-page__orb login-page__orb--3" />
+    <TechBackground />
+    <div class="login-page__scan" />
 
     <el-card class="login-card">
       <div class="login-card__logo">
@@ -91,76 +88,32 @@ async function handleLogin(): Promise<void> {
   justify-content: center;
   overflow: hidden;
   background:
-    radial-gradient(ellipse 55% 45% at 50% 0%, rgba(64, 158, 255, 0.16), transparent 65%),
-    linear-gradient(165deg, #eef6ff 0%, #e3eefc 50%, #f8fbff 100%);
+    radial-gradient(ellipse 55% 45% at 50% 0%, rgba(110, 175, 255, 0.16), transparent 65%),
+    linear-gradient(165deg, #d7e4f4 0%, #e6eef9 50%, #dce8f6 100%);
 }
 
-/* 透视网格（底部拉远形成纵深） */
-.login-page__grid {
+/* 顶部扫描光带（柔和半透明） */
+.login-page__scan {
   position: absolute;
-  inset: -20% -30% -40% -30%;
-  background-image:
-    linear-gradient(rgba(64, 158, 255, 0.14) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(64, 158, 255, 0.14) 1px, transparent 1px);
-  background-size: 52px 52px;
-  transform: perspective(520px) rotateX(58deg) translateY(18%);
-  transform-origin: center bottom;
-  animation: gc-grid-move 18s linear infinite;
-  mask-image: linear-gradient(to top, rgba(0, 0, 0, 0.9), transparent 88%);
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, transparent, rgba(110, 175, 255, 0.7), transparent);
+  animation: gc-scan 4s ease-in-out infinite;
+  opacity: 0.8;
 }
 
-@keyframes gc-grid-move {
-  from {
-    background-position: 0 0;
-  }
-  to {
-    background-position: 0 52px;
-  }
-}
-
-/* 浮动光晕 */
-.login-page__orb {
-  position: absolute;
-  border-radius: 50%;
-  filter: blur(60px);
-  opacity: 0.5;
-  pointer-events: none;
-}
-
-.login-page__orb--1 {
-  width: 420px;
-  height: 420px;
-  left: -80px;
-  top: -60px;
-  background: rgba(64, 158, 255, 0.35);
-  animation: gc-float 9s ease-in-out infinite;
-}
-
-.login-page__orb--2 {
-  width: 320px;
-  height: 320px;
-  right: -60px;
-  bottom: 10%;
-  background: rgba(0, 200, 255, 0.3);
-  animation: gc-float 11s ease-in-out infinite reverse;
-}
-
-.login-page__orb--3 {
-  width: 180px;
-  height: 180px;
-  left: 20%;
-  bottom: 6%;
-  background: rgba(96, 165, 250, 0.35);
-  animation: gc-float 8s ease-in-out infinite 1s;
-}
-
-@keyframes gc-float {
-  0%,
-  100% {
+@keyframes gc-scan {
+  0% {
     transform: translateY(0);
   }
   50% {
-    transform: translateY(-28px);
+    transform: translateY(60vh);
+    opacity: 0.25;
+  }
+  100% {
+    transform: translateY(0);
   }
 }
 

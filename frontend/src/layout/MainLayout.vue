@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted } from "vue";
 import { useRoute, useRouter } from "vue-router";
+import TechBackground from "@/components/TechBackground.vue";
 import { useAuthStore } from "@/stores/auth";
 
 const route = useRoute();
@@ -47,7 +48,9 @@ onMounted(() => {
 </script>
 
 <template>
-  <el-container class="main-layout">
+  <div class="main-layout-wrap">
+    <TechBackground />
+    <el-container class="main-layout">
     <el-aside width="200px" class="main-layout__aside">
       <div class="main-layout__brand">GuiCang 归藏</div>
       <el-menu router :default-active="route.path" class="main-layout__menu">
@@ -79,11 +82,19 @@ onMounted(() => {
         <router-view />
       </el-main>
     </el-container>
-  </el-container>
+    </el-container>
+  </div>
 </template>
 
 <style scoped>
+.main-layout-wrap {
+  position: relative;
+  height: 100vh;
+}
+
 .main-layout {
+  position: relative;
+  z-index: 1;
   height: 100vh;
 }
 
