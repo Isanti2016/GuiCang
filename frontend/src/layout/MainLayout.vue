@@ -15,7 +15,6 @@ const menus = computed(() => {
   const items = [
     { path: "/dashboard", title: "监控大屏", icon: "Odometer" },
     { path: "/files", title: "文件管理", icon: "Folder" },
-    { path: "/help", title: "使用手册", icon: "Reading" },
     { path: "/admin/users", title: "用户管理", icon: "User", adminOnly: true },
     { path: "/admin/roles", title: "角色与权限", icon: "Lock", adminOnly: true },
     { path: "/sync", title: "同步任务", icon: "Clock", adminOnly: true },
@@ -27,6 +26,14 @@ const menus = computed(() => {
 async function handleLogout(): Promise<void> {
   await authStore.logout();
   await router.replace("/login");
+}
+
+async function handleCommand(command: string): Promise<void> {
+  if (command === "logout") {
+    await handleLogout();
+  } else if (command === "help") {
+    await router.push("/help");
+  }
 }
 
 onMounted(() => {
@@ -54,9 +61,7 @@ onMounted(() => {
     <el-container>
       <el-header class="main-layout__header">
         <span class="main-layout__title">{{ title }}</span>
-        <el-dropdown
-          @command="(cmd: string) => cmd === 'logout' && handleLogout()"
-        >
+        <el-dropdown @command="handleCommand">
           <span class="main-layout__user">
             {{ username }}
             <el-icon><ArrowDown /></el-icon>
@@ -64,6 +69,7 @@ onMounted(() => {
           <template #dropdown>
             <el-dropdown-menu>
               <el-dropdown-item command="logout">退出登录</el-dropdown-item>
+              <el-dropdown-item command="help" divided>使用手册</el-dropdown-item>
             </el-dropdown-menu>
           </template>
         </el-dropdown>
@@ -82,9 +88,8 @@ onMounted(() => {
 }
 
 .main-layout__aside {
-  background:
-    linear-gradient(180deg, rgba(4, 8, 26, 0.96) 0%, rgba(2, 6, 18, 0.96) 100%);
-  border-right: 1px solid rgba(0, 224, 255, 0.16);
+  background: linear-gradient(180deg, #ffffff 0%, #e9f2fd 100%);
+  border-right: 1px solid rgba(64, 158, 255, 0.2);
   position: relative;
 }
 
@@ -105,20 +110,19 @@ onMounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #eaf4ff;
+  color: #1f4e8c;
   font-size: 18px;
   font-weight: 600;
   letter-spacing: 2px;
-  text-shadow: 0 0 14px rgba(0, 224, 255, 0.55);
-  border-bottom: 1px solid rgba(0, 224, 255, 0.12);
+  border-bottom: 1px solid rgba(64, 158, 255, 0.18);
 }
 
 .main-layout__menu {
   border-right: none;
   background: transparent;
-  --el-menu-text-color: #9fc3ff;
-  --el-menu-hover-bg-color: rgba(64, 158, 255, 0.12);
-  --el-menu-active-color: #00e0ff;
+  --el-menu-text-color: #2b3a4a;
+  --el-menu-hover-bg-color: rgba(64, 158, 255, 0.1);
+  --el-menu-active-color: #1f4e8c;
   --el-menu-bg-color: transparent;
 }
 
@@ -126,15 +130,15 @@ onMounted(() => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  background: rgba(6, 12, 28, 0.6);
-  border-bottom: 1px solid rgba(0, 224, 255, 0.14);
+  background: rgba(255, 255, 255, 0.72);
+  border-bottom: 1px solid rgba(64, 158, 255, 0.2);
   backdrop-filter: blur(6px);
 }
 
 .main-layout__title {
   font-size: 16px;
   font-weight: 500;
-  color: #d7e3f4;
+  color: #1f4e8c;
 }
 
 .main-layout__user {
@@ -142,7 +146,7 @@ onMounted(() => {
   align-items: center;
   gap: 4px;
   cursor: pointer;
-  color: #9fc3ff;
+  color: #1f4e8c;
 }
 
 .main-layout__content {

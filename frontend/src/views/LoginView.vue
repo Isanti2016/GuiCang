@@ -91,8 +91,8 @@ async function handleLogin(): Promise<void> {
   justify-content: center;
   overflow: hidden;
   background:
-    radial-gradient(ellipse 55% 45% at 50% 0%, rgba(0, 122, 255, 0.18), transparent 65%),
-    linear-gradient(165deg, #04081a 0%, #02040c 50%, #071230 100%);
+    radial-gradient(ellipse 55% 45% at 50% 0%, rgba(64, 158, 255, 0.16), transparent 65%),
+    linear-gradient(165deg, #eef6ff 0%, #e3eefc 50%, #f8fbff 100%);
 }
 
 /* 透视网格（底部拉远形成纵深） */
@@ -100,8 +100,8 @@ async function handleLogin(): Promise<void> {
   position: absolute;
   inset: -20% -30% -40% -30%;
   background-image:
-    linear-gradient(rgba(0, 224, 255, 0.16) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(0, 224, 255, 0.16) 1px, transparent 1px);
+    linear-gradient(rgba(64, 158, 255, 0.14) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(64, 158, 255, 0.14) 1px, transparent 1px);
   background-size: 52px 52px;
   transform: perspective(520px) rotateX(58deg) translateY(18%);
   transform-origin: center bottom;
@@ -132,7 +132,7 @@ async function handleLogin(): Promise<void> {
   height: 420px;
   left: -80px;
   top: -60px;
-  background: rgba(0, 122, 255, 0.5);
+  background: rgba(64, 158, 255, 0.35);
   animation: gc-float 9s ease-in-out infinite;
 }
 
@@ -141,7 +141,7 @@ async function handleLogin(): Promise<void> {
   height: 320px;
   right: -60px;
   bottom: 10%;
-  background: rgba(0, 224, 255, 0.4);
+  background: rgba(0, 200, 255, 0.3);
   animation: gc-float 11s ease-in-out infinite reverse;
 }
 
@@ -150,7 +150,7 @@ async function handleLogin(): Promise<void> {
   height: 180px;
   left: 20%;
   bottom: 6%;
-  background: rgba(64, 158, 255, 0.45);
+  background: rgba(96, 165, 250, 0.35);
   animation: gc-float 8s ease-in-out infinite 1s;
 }
 
@@ -168,13 +168,13 @@ async function handleLogin(): Promise<void> {
   position: relative;
   width: 400px;
   padding: 8px 8px 4px;
-  background: rgba(9, 15, 32, 0.82) !important;
-  border: 1px solid rgba(0, 224, 255, 0.28) !important;
+  background: rgba(255, 255, 255, 0.92) !important;
+  border: 1px solid rgba(64, 158, 255, 0.35) !important;
   border-radius: 12px;
   box-shadow:
-    0 0 32px rgba(0, 122, 255, 0.25),
-    0 12px 48px rgba(0, 0, 0, 0.5);
-  backdrop-filter: blur(10px);
+    0 0 24px rgba(64, 158, 255, 0.18),
+    0 12px 40px rgba(64, 158, 255, 0.15);
+  backdrop-filter: blur(8px);
 }
 
 .login-card__logo {
@@ -188,8 +188,8 @@ async function handleLogin(): Promise<void> {
   font-size: 26px;
   text-align: center;
   letter-spacing: 4px;
-  color: #eaf4ff;
-  text-shadow: 0 0 18px rgba(0, 224, 255, 0.6);
+  color: #1f4e8c;
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.6);
 }
 
 .login-card__subtitle {
@@ -207,7 +207,7 @@ async function handleLogin(): Promise<void> {
 .login-card__hint {
   margin: 14px 0 4px;
   text-align: center;
-  color: rgba(159, 195, 255, 0.55);
+  color: rgba(31, 78, 140, 0.55);
   font-size: 12px;
 }
 </style>

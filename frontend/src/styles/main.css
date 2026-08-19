@@ -26,36 +26,15 @@ body {
     sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  color: #303133;
-  background-color: #f5f7fa;
-}
-
-/* ============ 科技感全局背景（深色主题） ============ */
-:root {
-  --gc-bg-base: #060a17;
-  --gc-bg-deep: #02040c;
-  --gc-grid-line: rgba(64, 158, 255, 0.08);
-  --gc-glow-1: rgba(0, 122, 255, 0.12);
-  --gc-glow-2: rgba(0, 255, 209, 0.07);
-  --gc-accent: #00e0ff;
-}
-
-html.dark {
-  --el-bg-color: rgba(13, 20, 38, 0.85);
-  --el-bg-color-overlay: rgba(13, 20, 38, 0.95);
-  --el-fill-color-blank: rgba(13, 20, 38, 0.55);
-}
-
-html.dark body {
-  color: #d7e3f4;
-  background-color: var(--gc-bg-base);
-  /* 深空渐变 + 网格 + 光晕 */
+  color: #2b3a4a;
+  /* 清爽科技风：淡蓝渐变 + 浅网格 + 柔和光晕 */
+  background-color: #eef5fc;
   background-image:
-    radial-gradient(ellipse 60% 40% at 20% 0%, var(--gc-glow-1), transparent 60%),
-    radial-gradient(ellipse 50% 35% at 85% 90%, var(--gc-glow-2), transparent 60%),
-    linear-gradient(var(--gc-grid-line) 1px, transparent 1px),
-    linear-gradient(90deg, var(--gc-grid-line) 1px, transparent 1px),
-    linear-gradient(160deg, #060a17 0%, #02040c 55%, #051021 100%);
+    radial-gradient(ellipse 55% 40% at 15% 0%, rgba(64, 158, 255, 0.12), transparent 60%),
+    radial-gradient(ellipse 45% 35% at 90% 100%, rgba(0, 200, 255, 0.1), transparent 60%),
+    linear-gradient(rgba(64, 158, 255, 0.07) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(64, 158, 255, 0.07) 1px, transparent 1px),
+    linear-gradient(165deg, #f4f9ff 0%, #e9f2fc 50%, #f6fbff 100%);
   background-size:
     100% 100%,
     100% 100%,
@@ -65,21 +44,16 @@ html.dark body {
   background-attachment: fixed;
 }
 
-html.dark .el-card {
-  background: rgba(13, 20, 38, 0.72);
-  border: 1px solid rgba(64, 158, 255, 0.18);
-  backdrop-filter: blur(6px);
-  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.35);
+/* 卡片：白色半透明 + 浅蓝描边 + 柔和阴影 */
+.el-card {
+  background: rgba(255, 255, 255, 0.86);
+  border: 1px solid rgba(64, 158, 255, 0.22);
+  box-shadow: 0 6px 24px rgba(64, 158, 255, 0.12);
 }
 
-html.dark .el-table {
-  --el-table-bg-color: transparent;
-  --el-table-tr-bg-color: transparent;
-  --el-table-header-bg-color: rgba(64, 158, 255, 0.08);
-}
-
-html.dark .el-table th.el-table__cell {
-  color: #9fc3ff;
+.el-table th.el-table__cell {
+  background: rgba(64, 158, 255, 0.08);
+  color: #1f4e8c;
 }
 
 /* 科技感点缀：滚动条 */
@@ -89,7 +63,7 @@ html.dark .el-table th.el-table__cell {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(64, 158, 255, 0.35);
+  background: rgba(64, 158, 255, 0.3);
   border-radius: 4px;
 }
 
