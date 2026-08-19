@@ -27,14 +27,13 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   color: #2b3a4a;
-  /* 雾蓝半透明科技风：柔和中间调渐变 + 光晕（半透明装饰见 TechBackground 组件） */
+  /* 主界面背景：美景图 + 半透明白遮罩（图由 TechBackground 玻璃面板点缀） */
   background-color: #d9e6f6;
   background-image:
-    radial-gradient(1200px 620px at 12% -8%, rgba(120, 180, 255, 0.22), transparent 62%),
-    radial-gradient(900px 520px at 108% 24%, rgba(150, 220, 255, 0.18), transparent 58%),
-    radial-gradient(760px 720px at 50% 118%, rgba(165, 200, 255, 0.16), transparent 62%),
-    linear-gradient(160deg, #d7e4f4 0%, #e8f0fa 45%, #dbe7f6 100%);
-  background-size: 100% 100%;
+    linear-gradient(rgba(255, 255, 255, 0.6), rgba(255, 255, 255, 0.62)),
+    url("/backgrounds/bg-main.jpg");
+  background-size: cover;
+  background-position: center;
   background-attachment: fixed;
 }
 

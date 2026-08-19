@@ -88,8 +88,8 @@ async function handleLogin(): Promise<void> {
   justify-content: center;
   overflow: hidden;
   background:
-    radial-gradient(ellipse 55% 45% at 50% 0%, rgba(110, 175, 255, 0.16), transparent 65%),
-    linear-gradient(165deg, #d7e4f4 0%, #e6eef9 50%, #dce8f6 100%);
+    linear-gradient(rgba(255, 255, 255, 0.5), rgba(255, 255, 255, 0.58)),
+    url("/backgrounds/bg-login.jpg") center / cover no-repeat;
 }
 
 /* 顶部扫描光带（柔和半透明） */
