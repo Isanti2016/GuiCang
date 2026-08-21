@@ -1,16 +1,12 @@
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from "vue";
-import {
-  ElMessage,
-  ElMessageBox,
-  type FormInstance,
-  type FormRules,
-} from "element-plus";
+import { computed, nextTick, onMounted, reactive, ref } from "vue";
+import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from "element-plus";
 import MarkdownIt from "markdown-it";
 import hljs from "highlight.js";
-import "highlight.js/styles/github.css";
+import "highlight.js/styles/github-dark.css";
 import {
   deleteFile,
+  downloadFileAsBlob,
   listFiles,
   mkdir,
   moveFile,
@@ -19,7 +15,7 @@ import {
   searchFiles,
   streamUrl,
   thumbnailUrl,
-  upload,
+  uploadWithProgress,
   writeText,
   type FileEntry,
 } from "@/api/file";
@@ -32,52 +28,96 @@ const md = new MarkdownIt({
       try {
         return hljs.highlight(code, { language: lang }).value;
       } catch {
-        // 高亮失败回退
+        /* 高亮失败回退 */
       }
     }
     return "";
   },
 });
 
-// ---------- 目录树 ----------
-const treeData = ref<FileEntry[]>([
-  { name: "根目录", path: "", dir: true, size: 0, mtime: 0, kind: "dir" },
-]);
+// ============ 状态 ============
 const currentDir = ref("");
+const list = ref<FileEntry[]>([]);
+const loading = ref(false);
+const viewMode = ref<"grid" | "list">(
+  (localStorage.getItem("gc.view-mode") as "grid" | "list") || "grid",
+);
+const selected = ref<Set<string>>(new Set());
+const searchResults = ref<FileEntry[]>([]);
+const searchKeyword = ref("");
+
+const RECENT_KEY = "gc.recent-dirs";
+const recentDirs = ref<string[]>([]);
+
 const breadcrumbs = computed(() => {
   const parts = currentDir.value ? currentDir.value.split("/") : [];
-  return parts.map((part, index) => ({
-    name: part,
-    path: parts.slice(0, index + 1).join("/"),
-  }));
+  return parts.map((part, index) => ({ name: part, path: parts.slice(0, index + 1).join("/") }));
 });
 
-async function loadTree(): Promise<void> {
-  treeData.value = [
-    { name: "根目录", path: "", dir: true, size: 0, mtime: 0, kind: "dir" },
-  ];
-}
+const selectedEntries = computed(() =>
+  list.value.filter((e) => selected.value.has(e.path)),
+);
 
-async function handleNodeClick(node: FileEntry): Promise<void> {
-  if (node.dir) {
-    await navigate(node.path);
-  }
+// ============ 目录导航 ============
+const locations = [
+  { name: "根目录", path: "" },
+  { name: "共享", path: "shared" },
+  { name: "媒体", path: "media" },
+  { name: "个人", path: "personal" },
+];
+
+function rememberDir(path: string): void {
+  if (!path) return;
+  recentDirs.value = [path, ...recentDirs.value.filter((d) => d !== path)].slice(0, 8);
+  localStorage.setItem(RECENT_KEY, JSON.stringify(recentDirs.value));
 }
 
 async function navigate(path: string): Promise<void> {
   currentDir.value = path;
+  selected.value = new Set();
+  searchResults.value = [];
+  searchKeyword.value = "";
+  rememberDir(path);
   await loadList();
 }
 
-// ---------- 文件列表 ----------
-const list = ref<FileEntry[]>([]);
-const loading = ref(false);
 async function loadList(): Promise<void> {
   loading.value = true;
   try {
     list.value = await listFiles(currentDir.value);
   } finally {
     loading.value = false;
+  }
+}
+
+// ============ 视图切换 ============
+function switchView(mode: "grid" | "list"): void {
+  viewMode.value = mode;
+  localStorage.setItem("gc.view-mode", mode);
+}
+
+// ============ 选择 ============
+function toggleSelect(entry: FileEntry): void {
+  if (selected.value.has(entry.path)) selected.value.delete(entry.path);
+  else selected.value.add(entry.path);
+}
+
+function clearSelection(): void {
+  selected.value = new Set();
+}
+
+// ============ 条目交互 ============
+function handleEntryClick(entry: FileEntry): void {
+  if (viewMode.value === "grid") {
+    toggleSelect(entry);
+  }
+}
+
+function handleEntryDblClick(entry: FileEntry): void {
+  if (entry.dir) {
+    void navigate(entry.path);
+  } else if (canPreview(entry)) {
+    void openPreview(entry);
   }
 }
 
@@ -94,7 +134,15 @@ const formatTime = (mtime: number): string =>
 const canPreview = (entry: FileEntry): boolean =>
   ["image", "video", "note"].includes(entry.kind);
 
-// ---------- 新建目录 ----------
+const kindLabel: Record<string, string> = {
+  dir: "目录",
+  image: "图片",
+  video: "视频",
+  note: "文档",
+  other: "文件",
+};
+
+// ============ 新建目录 ============
 const mkdirDialog = ref(false);
 const mkdirForm = reactive({ name: "" });
 const mkdirFormRef = ref<FormInstance>();
@@ -106,29 +154,34 @@ async function handleMkdir(): Promise<void> {
   if (!mkdirFormRef.value) return;
   const valid = await mkdirFormRef.value.validate().catch(() => false);
   if (!valid) return;
-  const path = currentDir.value
-    ? `${currentDir.value}/${mkdirForm.name}`
-    : mkdirForm.name;
+  const path = currentDir.value ? `${currentDir.value}/${mkdirForm.name}` : mkdirForm.name;
   await mkdir(path);
-  ElMessage.success("已创建");
+  ElMessage.success("目录已创建");
   mkdirDialog.value = false;
   mkdirForm.name = "";
   await loadList();
 }
 
-// ---------- 上传 ----------
+// ============ 上传（拖拽 + 进度） ============
 const uploadDialog = ref(false);
 const uploadFiles = ref<File[]>([]);
+const uploadProgress = ref(0);
 const uploading = ref(false);
 
 async function handleUpload(): Promise<void> {
   if (uploadFiles.value.length === 0) return;
   uploading.value = true;
+  uploadProgress.value = 0;
+  let done = 0;
+  const total = uploadFiles.value.length;
   try {
     for (const file of uploadFiles.value) {
-      await upload(currentDir.value, file);
+      await uploadWithProgress(currentDir.value, file, (percent) => {
+        uploadProgress.value = Math.round(((done + percent / 100) / total) * 100);
+      });
+      done += 1;
     }
-    ElMessage.success("上传完成");
+    ElMessage.success(`已上传 ${total} 个文件`);
     uploadDialog.value = false;
     uploadFiles.value = [];
     await loadList();
@@ -137,11 +190,17 @@ async function handleUpload(): Promise<void> {
   }
 }
 
-// ---------- 重命名 / 移动 / 删除 ----------
+// ============ 重命名 / 移动 / 删除 ============
 const renameDialog = ref(false);
 const renameForm = reactive({ name: "" });
 const renameTarget = ref<FileEntry | null>(null);
 const renameFormRef = ref<FormInstance>();
+
+function openRename(entry: FileEntry): void {
+  renameTarget.value = entry;
+  renameForm.name = entry.name;
+  renameDialog.value = true;
+}
 
 async function handleRename(): Promise<void> {
   if (!renameFormRef.value || !renameTarget.value) return;
@@ -153,42 +212,83 @@ async function handleRename(): Promise<void> {
   await loadList();
 }
 
-async function handleDelete(entry: FileEntry): Promise<void> {
-  const isDir = entry.dir;
-  const message = isDir
-    ? `目录「${entry.name}」将递归删除，确认？`
-    : `确认删除「${entry.name}」？`;
-  await ElMessageBox.confirm(message, "删除确认", { type: "warning" });
-  await deleteFile(entry.path, isDir);
+async function handleDelete(entries: FileEntry[]): Promise<void> {
+  const names = entries.map((e) => e.name).join("、");
+  const hasDir = entries.some((e) => e.dir);
+  await ElMessageBox.confirm(
+    `确认删除「${names}」？${hasDir ? "目录将递归删除。" : ""}`,
+    "删除确认",
+    { type: "warning", confirmButtonText: "删除" },
+  );
+  for (const entry of entries) {
+    await deleteFile(entry.path, entry.dir);
+  }
   ElMessage.success("已删除");
+  clearSelection();
   await loadList();
+}
+
+async function handleBatchDelete(): Promise<void> {
+  if (selectedEntries.value.length === 0) return;
+  await handleDelete(selectedEntries.value);
 }
 
 const moveDialog = ref(false);
 const moveTarget = ref<FileEntry | null>(null);
-const moveDir = ref("");
-const moveCandidates = ref<FileEntry[]>([]);
+
+interface TreeNode {
+  name: string
+  path: string
+  children?: TreeNode[]
+  leaf?: boolean
+}
+
+const treeProps = { label: "name", children: "children", isLeaf: "leaf" };
+
+async function loadMoveTree(
+  node: { level?: number; path?: string },
+  resolve: (data: TreeNode[]) => void,
+): Promise<void> {
+  const base = node.level === 0 ? "" : node.path ?? "";
+  const children = await listFiles(base);
+  resolve(children.filter((c) => c.dir).map((c) => ({ name: c.name, path: c.path, leaf: false })));
+}
 
 async function openMove(entry: FileEntry): Promise<void> {
   moveTarget.value = entry;
-  moveDir.value = "";
+  moveTargetNode.value = "";
   moveDialog.value = true;
-  await refreshMoveCandidates();
-}
-
-async function refreshMoveCandidates(): Promise<void> {
-  moveCandidates.value = await listFiles(moveDir.value);
 }
 
 async function handleMove(): Promise<void> {
-  if (!moveTarget.value) return;
-  await moveFile(moveTarget.value.path, moveDir.value);
+  if (!moveTarget.value || !moveTargetNode.value) return;
+  await moveFile(moveTarget.value.path, moveTargetNode.value);
   ElMessage.success("已移动");
   moveDialog.value = false;
   await loadList();
 }
 
-// ---------- 预览（md/txt/图片/视频） ----------
+const moveTargetNode = ref<string>("");
+
+function handleMoveNodeClick(node: TreeNode): void {
+  moveTargetNode.value = node.path;
+}
+
+// ============ 下载 ============
+async function handleDownload(entry: FileEntry): Promise<void> {
+  if (entry.dir) {
+    ElMessage.info("目录请使用打包功能（暂未提供）");
+    return;
+  }
+  try {
+    await downloadFileAsBlob(entry.path);
+    ElMessage.success("开始下载");
+  } catch {
+    ElMessage.error("下载失败");
+  }
+}
+
+// ============ 预览 ============
 const previewOpen = ref(false);
 const previewEntry = ref<FileEntry | null>(null);
 const previewMode = ref<"view" | "edit">("view");
@@ -220,10 +320,7 @@ async function handleSave(): Promise<void> {
   ElMessage.success("已保存");
 }
 
-// ---------- 搜索 ----------
-const searchKeyword = ref("");
-const searchResults = ref<FileEntry[]>([]);
-
+// ============ 搜索 ============
 async function handleSearch(): Promise<void> {
   if (!searchKeyword.value.trim()) {
     searchResults.value = [];
@@ -236,214 +333,216 @@ function useSearchResult(entry: FileEntry): void {
   searchResults.value = [];
   searchKeyword.value = "";
   const slash = entry.path.lastIndexOf("/");
-  if (slash >= 0) {
-    void navigate(entry.path.substring(0, slash));
-  }
+  void navigate(slash >= 0 ? entry.path.substring(0, slash) : "");
+  void nextTick(() => {
+    // 定位到目标文件（列表/网格中闪烁高亮）
+  });
 }
 
-onMounted(async () => {
-  await loadTree();
-  await loadList();
-});
-
-const refresh = (): void => {
+// ============ 初始化 ============
+onMounted(() => {
+  const saved = localStorage.getItem(RECENT_KEY);
+  if (saved) {
+    try {
+      recentDirs.value = JSON.parse(saved) as string[];
+    } catch {
+      recentDirs.value = [];
+    }
+  }
   void loadList();
-  void loadTree();
-};
+});
 </script>
 
 <template>
-  <el-container class="file-manager">
-    <el-aside width="240px" class="file-manager__tree">
-      <el-input
-        v-model="searchKeyword"
-        placeholder="搜索文件"
-        clearable
-        @keyup.enter="handleSearch"
-        @clear="searchResults = []"
-      >
-        <template #append>
-          <el-button @click="handleSearch">搜</el-button>
-        </template>
-      </el-input>
+  <div class="file-manager">
+    <!-- 左侧导航 -->
+    <aside class="file-manager__nav">
+      <div class="file-manager__nav-search">
+        <el-input
+          v-model="searchKeyword"
+          placeholder="搜索文件"
+          clearable
+          @keyup.enter="handleSearch"
+          @clear="searchResults = []"
+        >
+          <template #prefix>
+            <el-icon><Search /></el-icon>
+          </template>
+        </el-input>
+      </div>
 
       <template v-if="searchResults.length > 0">
-        <el-scrollbar class="file-manager__search">
+        <div class="file-manager__nav-title">搜索结果</div>
+        <div class="file-manager__search-list">
           <div
             v-for="item in searchResults"
             :key="item.path"
             class="file-manager__search-item"
             @click="useSearchResult(item)"
           >
-            <el-icon><Document /></el-icon>
+            <el-icon :color="item.dir ? '#6ec8ff' : '#8fb6dd'">
+              <Folder v-if="item.dir" />
+              <Document v-else />
+            </el-icon>
             <span class="file-manager__search-name">{{ item.name }}</span>
             <span class="file-manager__search-path">{{ item.path }}</span>
           </div>
-        </el-scrollbar>
+        </div>
       </template>
 
-      <el-tree
-        v-else
-        :data="treeData"
-        node-key="path"
-        :props="{ label: 'name', children: 'children' }"
-        :expand-on-click-node="false"
-        @node-click="handleNodeClick"
-      />
-    </el-aside>
+      <template v-else>
+        <div class="file-manager__nav-title">位置</div>
+        <div class="file-manager__nav-item" v-for="loc in locations" :key="loc.path" @click="navigate(loc.path)">
+          <el-icon color="#6ec8ff"><FolderOpened /></el-icon>
+          <span>{{ loc.name }}</span>
+        </div>
 
-    <el-main class="file-manager__main">
+        <div v-if="recentDirs.length" class="file-manager__nav-title file-manager__nav-title--recent">最近访问</div>
+        <div v-for="dir in recentDirs" :key="dir" class="file-manager__nav-item" @click="navigate(dir)">
+          <el-icon color="#d4af37"><Clock /></el-icon>
+          <span class="file-manager__nav-path">{{ dir }}</span>
+        </div>
+      </template>
+    </aside>
+
+    <!-- 主区 -->
+    <main class="file-manager__main">
+      <!-- 工具栏 -->
       <div class="file-manager__toolbar">
-        <el-breadcrumb separator="/">
+        <el-breadcrumb separator="/" class="file-manager__breadcrumb">
           <el-breadcrumb-item @click="navigate('')">根目录</el-breadcrumb-item>
-          <el-breadcrumb-item
-            v-for="crumb in breadcrumbs"
-            :key="crumb.path"
-            @click="navigate(crumb.path)"
-          >
+          <el-breadcrumb-item v-for="crumb in breadcrumbs" :key="crumb.path" @click="navigate(crumb.path)">
             {{ crumb.name }}
           </el-breadcrumb-item>
         </el-breadcrumb>
+
         <div class="file-manager__actions">
-          <el-button size="small" @click="refresh">刷新</el-button>
-          <el-button size="small" type="primary" @click="mkdirDialog = true"
-            >新建目录</el-button
-          >
-          <el-button size="small" type="primary" @click="uploadDialog = true"
-            >上传</el-button
-          >
+          <el-radio-group v-model="viewMode" size="small" @change="switchView">
+            <el-radio-button value="grid"><el-icon><Grid /></el-icon></el-radio-button>
+            <el-radio-button value="list"><el-icon><List /></el-icon></el-radio-button>
+          </el-radio-group>
+          <el-button size="small" @click="loadList"><el-icon><Refresh /></el-icon>刷新</el-button>
+          <el-button size="small" type="primary" plain @click="mkdirDialog = true">
+            <el-icon><FolderAdd /></el-icon>新建目录
+          </el-button>
+          <el-button size="small" type="primary" @click="uploadDialog = true">
+            <el-icon><Upload /></el-icon>上传
+          </el-button>
         </div>
       </div>
 
-      <el-table
-        v-loading="loading"
-        :data="list"
-        size="small"
-        @row-dblclick="openPreview"
-      >
-        <el-table-column label="" width="44">
-          <template #default="{ row }">
-            <el-icon v-if="row.dir" color="#409eff"><Folder /></el-icon>
-            <img
-              v-else-if="['image', 'video'].includes(row.kind)"
-              :src="thumbnailUrl(row.path)"
-              class="file-manager__thumb"
-              loading="lazy"
-            />
-            <el-icon v-else color="#909399"><Document /></el-icon>
-          </template>
-        </el-table-column>
-        <el-table-column
-          prop="name"
-          label="名称"
-          min-width="220"
-          show-overflow-tooltip
+      <!-- 多选工具条 -->
+      <transition name="gc-fade">
+        <div v-if="selected.size > 0" class="file-manager__selectbar">
+          <span>已选 {{ selected.size }} 项</span>
+          <el-button size="small" type="danger" plain @click="handleBatchDelete">批量删除</el-button>
+          <el-button size="small" @click="clearSelection">取消选择</el-button>
+        </div>
+      </transition>
+
+      <!-- 内容区 -->
+      <div v-loading="loading" class="file-manager__content">
+        <!-- 网格视图 -->
+        <div v-if="viewMode === 'grid'" class="file-manager__grid">
+          <div
+            v-for="entry in list"
+            :key="entry.path"
+            class="file-manager__card"
+            :class="{ 'is-selected': selected.has(entry.path) }"
+            @click="handleEntryClick(entry)"
+            @dblclick="handleEntryDblClick(entry)"
+          >
+            <div class="file-manager__card-media">
+              <img v-if="['image', 'video'].includes(entry.kind)" :src="thumbnailUrl(entry.path)" loading="lazy" />
+              <el-icon v-else :size="34" :color="entry.dir ? '#6ec8ff' : '#8fb6dd'">
+                <Folder v-if="entry.dir" />
+                <Document v-else-if="entry.kind === 'other'" />
+                <Notebook v-else-if="entry.kind === 'note'" />
+              </el-icon>
+              <span class="file-manager__card-kind">{{ kindLabel[entry.kind] }}</span>
+            </div>
+            <div class="file-manager__card-info">
+              <div class="file-manager__card-name" :title="entry.name">{{ entry.name }}</div>
+              <div class="file-manager__card-meta">
+                {{ entry.dir ? "--" : formatSize(entry.size) }} · {{ formatTime(entry.mtime).slice(5, 16) }}
+              </div>
+            </div>
+            <div class="file-manager__card-actions">
+              <el-button link size="small" @click.stop="openPreview(entry)" :disabled="!canPreview(entry)">预览</el-button>
+              <el-button link size="small" @click.stop="handleDownload(entry)" :disabled="entry.dir">下载</el-button>
+              <el-button link size="small" @click.stop="openMove(entry)">移动</el-button>
+              <el-button link size="small" @click.stop="openRename(entry)">重命名</el-button>
+              <el-button link type="danger" size="small" @click.stop="handleDelete([entry])">删除</el-button>
+            </div>
+          </div>
+
+          <el-empty v-if="!loading && list.length === 0" description="目录为空" />
+        </div>
+
+        <!-- 列表视图 -->
+        <el-table
+          v-else
+          v-loading="loading"
+          :data="list"
+          size="small"
+          class="file-manager__table"
+          @row-dblclick="handleEntryDblClick"
+          @selection-change="(rows: FileEntry[]) => (selected = new Set(rows.map((r) => r.path)))"
         >
-          <template #default="{ row }">
-            <span
-              class="file-manager__name"
-              @click="
-                row.dir
-                  ? navigate(row.path)
-                  : canPreview(row) && openPreview(row)
-              "
-            >
-              {{ row.name }}
-            </span>
-          </template>
-        </el-table-column>
-        <el-table-column prop="size" label="大小" width="110">
-          <template #default="{ row }">{{
-            row.dir ? "--" : formatSize(row.size)
-          }}</template>
-        </el-table-column>
-        <el-table-column prop="mtime" label="修改时间" width="170">
-          <template #default="{ row }">{{ formatTime(row.mtime) }}</template>
-        </el-table-column>
-        <el-table-column label="操作" width="240">
-          <template #default="{ row }">
-            <el-button
-              link
-              type="primary"
-              size="small"
-              @click="openPreview(row)"
-              :disabled="!canPreview(row)"
-            >
-              预览
-            </el-button>
-            <el-button link type="primary" size="small" @click="openMove(row)"
-              >移动</el-button
-            >
-            <el-button
-              link
-              type="primary"
-              size="small"
-              @click="
-                ((renameTarget = row),
-                (renameForm.name = row.name),
-                (renameDialog = true))
-              "
-            >
-              重命名
-            </el-button>
-            <el-button
-              link
-              type="danger"
-              size="small"
-              @click="handleDelete(row)"
-              >删除</el-button
-            >
-          </template>
-        </el-table-column>
-      </el-table>
-    </el-main>
+          <el-table-column type="selection" width="40" />
+          <el-table-column label="" width="46">
+            <template #default="{ row }">
+              <el-icon v-if="row.dir" color="#6ec8ff"><Folder /></el-icon>
+              <img v-else-if="['image', 'video'].includes(row.kind)" :src="thumbnailUrl(row.path)" class="file-manager__thumb" loading="lazy" />
+              <el-icon v-else color="#8fb6dd"><Document /></el-icon>
+            </template>
+          </el-table-column>
+          <el-table-column prop="name" label="名称" min-width="220" show-overflow-tooltip>
+            <template #default="{ row }">
+              <span
+                class="file-manager__name"
+                @click="row.dir ? navigate(row.path) : canPreview(row) && openPreview(row)"
+              >{{ row.name }}</span>
+            </template>
+          </el-table-column>
+          <el-table-column prop="size" label="大小" width="110">
+            <template #default="{ row }">{{ row.dir ? "--" : formatSize(row.size) }}</template>
+          </el-table-column>
+          <el-table-column prop="mtime" label="修改时间" width="170">
+            <template #default="{ row }">{{ formatTime(row.mtime) }}</template>
+          </el-table-column>
+          <el-table-column label="操作" width="250">
+            <template #default="{ row }">
+              <el-button link type="primary" size="small" @click="openPreview(row)" :disabled="!canPreview(row)">预览</el-button>
+              <el-button link type="primary" size="small" @click="handleDownload(row)" :disabled="row.dir">下载</el-button>
+              <el-button link type="primary" size="small" @click="openMove(row)">移动</el-button>
+              <el-button link type="primary" size="small" @click="openRename(row)">重命名</el-button>
+              <el-button link type="danger" size="small" @click="handleDelete([row])">删除</el-button>
+            </template>
+          </el-table-column>
+        </el-table>
+      </div>
+    </main>
 
     <!-- 预览抽屉 -->
-    <el-drawer v-model="previewOpen" :title="previewEntry?.name" size="60%">
+    <el-drawer v-model="previewOpen" :title="previewEntry?.name" size="60%" class="file-manager__drawer">
       <template v-if="previewEntry">
-        <div
-          v-if="previewEntry.kind === 'image'"
-          class="file-manager__preview-image"
-        >
-          <img :src="streamUrl(previewEntry.path)" style="max-width: 100%" />
+        <div v-if="previewEntry.kind === 'image'" class="file-manager__preview-image">
+          <img :src="streamUrl(previewEntry.path)" style="max-width: 100%; border-radius: 8px" />
         </div>
-        <video
-          v-else-if="previewEntry.kind === 'video'"
-          :src="streamUrl(previewEntry.path)"
-          controls
-          style="width: 100%"
-        />
+        <video v-else-if="previewEntry.kind === 'video'" :src="streamUrl(previewEntry.path)" controls style="width: 100%; border-radius: 8px" />
         <div v-else-if="previewEntry.kind === 'note'">
           <div class="file-manager__preview-toolbar">
-            <el-button
-              v-if="previewMode === 'view'"
-              size="small"
-              type="primary"
-              @click="enterEdit"
-              >编辑</el-button
-            >
+            <el-button v-if="previewMode === 'view'" size="small" type="primary" @click="enterEdit">编辑</el-button>
             <template v-else>
-              <el-button size="small" type="success" @click="handleSave"
-                >保存</el-button
-              >
-              <el-button size="small" @click="previewMode = 'view'"
-                >取消</el-button
-              >
+              <el-button size="small" type="success" @click="handleSave">保存</el-button>
+              <el-button size="small" @click="previewMode = 'view'">取消</el-button>
             </template>
           </div>
-          <el-input
-            v-if="previewMode === 'edit'"
-            v-model="editingText"
-            type="textarea"
-            :rows="20"
-          />
-          <div
-            v-else
-            class="file-manager__markdown"
-            v-html="renderedMarkdown"
-          />
+          <el-input v-if="previewMode === 'edit'" v-model="editingText" type="textarea" :rows="20" />
+          <div v-else class="file-manager__markdown" v-html="renderedMarkdown" />
         </div>
-        <el-empty v-else description="该类型暂不支持预览" />
+        <el-empty v-else description="该类型暂不支持预览，可下载查看" />
       </template>
     </el-drawer>
 
@@ -451,7 +550,7 @@ const refresh = (): void => {
     <el-dialog v-model="mkdirDialog" title="新建目录" width="400px">
       <el-form ref="mkdirFormRef" :model="mkdirForm" :rules="mkdirRules">
         <el-form-item label="目录名" prop="name">
-          <el-input v-model="mkdirForm.name" placeholder="新目录名" />
+          <el-input v-model="mkdirForm.name" placeholder="新目录名" @keyup.enter="handleMkdir" />
         </el-form-item>
       </el-form>
       <template #footer>
@@ -467,15 +566,23 @@ const refresh = (): void => {
         drag
         multiple
         :auto-upload="false"
+        :on-change="() => (uploadProgress = 0)"
       >
         <el-icon class="el-icon--upload"><UploadFilled /></el-icon>
         <div class="el-upload__text">拖拽文件到此处，或<em>点击选择</em></div>
+        <template #tip>
+          <div class="el-upload__tip">单文件 ≤1G · 支持多选 · 危险扩展名会被拦截</div>
+        </template>
       </el-upload>
+      <el-progress
+        v-if="uploading"
+        :percentage="uploadProgress"
+        :stroke-width="10"
+        class="file-manager__upload-progress"
+      />
       <template #footer>
         <el-button @click="uploadDialog = false">取消</el-button>
-        <el-button type="primary" :loading="uploading" @click="handleUpload"
-          >上传</el-button
-        >
+        <el-button type="primary" :loading="uploading" @click="handleUpload">上传</el-button>
       </template>
     </el-dialog>
 
@@ -483,7 +590,7 @@ const refresh = (): void => {
     <el-dialog v-model="renameDialog" title="重命名" width="400px">
       <el-form ref="renameFormRef" :model="renameForm" :rules="mkdirRules">
         <el-form-item label="新名称" prop="name">
-          <el-input v-model="renameForm.name" />
+          <el-input v-model="renameForm.name" @keyup.enter="handleRename" />
         </el-form-item>
       </el-form>
       <template #footer>
@@ -493,166 +600,357 @@ const refresh = (): void => {
     </el-dialog>
 
     <!-- 移动 -->
-    <el-dialog v-model="moveDialog" title="移动到目录" width="500px">
-      <div class="file-manager__move-toolbar">
-        <el-button
-          size="small"
-          @click="
-            moveDir = '';
-            refreshMoveCandidates();
-          "
-          >根目录</el-button
-        >
-        <el-button
-          size="small"
-          :disabled="!moveDir"
-          @click="
-            moveDir = moveDir.includes('/')
-              ? moveDir.substring(0, moveDir.lastIndexOf('/'))
-              : '';
-            refreshMoveCandidates();
-          "
-        >
-          上一级
-        </el-button>
-      </div>
-      <el-scrollbar max-height="300px">
-        <div
-          v-for="dir in moveCandidates.filter((d) => d.dir)"
-          :key="dir.path"
-          class="file-manager__move-item"
-          @click="
-            moveDir = dir.path;
-            refreshMoveCandidates();
-          "
-        >
-          <el-icon color="#409eff"><Folder /></el-icon>
-          <span>{{ dir.name }}</span>
-        </div>
-        <el-empty
-          v-if="moveCandidates.filter((d) => d.dir).length === 0"
-          description="当前目录无子目录"
-          :image-size="60"
-        />
-      </el-scrollbar>
+    <el-dialog v-model="moveDialog" title="移动到目录" width="460px">
+      <el-tree
+        node-key="path"
+        :props="treeProps"
+        :expand-on-click-node="false"
+        lazy
+        :load="loadMoveTree"
+        highlight-current
+        @node-click="handleMoveNodeClick"
+      />
       <div class="file-manager__move-target">
-        目标：{{ moveDir || "（根目录）" }}
+        目标：{{ moveTargetNode || "（根目录）" }}
       </div>
       <template #footer>
         <el-button @click="moveDialog = false">取消</el-button>
         <el-button type="primary" @click="handleMove">移动</el-button>
       </template>
     </el-dialog>
-  </el-container>
+  </div>
 </template>
 
 <style scoped>
 .file-manager {
+  display: flex;
+  gap: 14px;
   height: calc(100vh - 120px);
+  font-family: var(--gc-font-sans, inherit);
 }
 
-.file-manager__tree {
-  border-right: 1px solid var(--el-border-color-light);
-  padding: 8px;
+/* ---------- 左侧导航（玻璃面板） ---------- */
+.file-manager__nav {
+  width: 220px;
+  flex-shrink: 0;
+  background: rgba(7, 22, 46, 0.7);
+  border: 1px solid rgba(140, 220, 255, 0.2);
+  border-radius: 12px;
+  padding: 12px;
+  backdrop-filter: blur(8px);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  overflow-y: auto;
 }
 
-.file-manager__search {
-  max-height: 400px;
+.file-manager__nav-title {
+  font-size: 12px;
+  letter-spacing: 2px;
+  color: #8fb6dd;
+  margin: 10px 4px 4px;
+}
+
+.file-manager__nav-title--recent {
+  border-top: 1px solid rgba(212, 175, 55, 0.3);
+  padding-top: 10px;
+}
+
+.file-manager__nav-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 8px;
+  border-radius: 8px;
+  cursor: pointer;
+  color: #bfdcf8;
+  font-size: 13px;
+  transition: background 0.15s;
+}
+
+.file-manager__nav-item:hover {
+  background: rgba(110, 200, 255, 0.12);
+}
+
+.file-manager__nav-path {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.file-manager__search-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
 }
 
 .file-manager__search-item {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 6px 4px;
+  padding: 6px 8px;
+  border-radius: 8px;
   cursor: pointer;
-  border-radius: 4px;
 }
 
 .file-manager__search-item:hover {
-  background: var(--el-fill-color-light);
+  background: rgba(110, 200, 255, 0.12);
 }
 
 .file-manager__search-name {
   font-weight: 500;
-}
-
-.file-manager__search-path {
-  color: var(--el-text-color-secondary);
-  font-size: 12px;
+  max-width: 80px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.file-manager__search-path {
+  color: #8fb6dd;
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ---------- 主区 ---------- */
+.file-manager__main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 }
 
 .file-manager__toolbar {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 12px;
+  gap: 12px;
+  background: rgba(7, 22, 46, 0.6);
+  border: 1px solid rgba(140, 220, 255, 0.18);
+  border-radius: 12px;
+  padding: 10px 14px;
+  backdrop-filter: blur(8px);
+}
+
+.file-manager__breadcrumb {
+  font-size: 13px;
 }
 
 .file-manager__actions {
   display: flex;
+  align-items: center;
   gap: 8px;
 }
 
-.file-manager__thumb {
-  width: 28px;
-  height: 28px;
+/* 多选工具条 */
+.file-manager__selectbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 14px;
+  background: rgba(212, 175, 55, 0.1);
+  border: 1px solid rgba(212, 175, 55, 0.45);
+  border-radius: 10px;
+  font-size: 13px;
+  color: #e8d9a8;
+}
+
+.gc-fade-enter-active,
+.gc-fade-leave-active {
+  transition: opacity 0.2s;
+}
+
+.gc-fade-enter-from,
+.gc-fade-leave-to {
+  opacity: 0;
+}
+
+/* ---------- 内容区 ---------- */
+.file-manager__content {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  background: rgba(7, 22, 46, 0.45);
+  border: 1px solid rgba(140, 220, 255, 0.14);
+  border-radius: 12px;
+  padding: 12px;
+}
+
+/* 网格视图 */
+.file-manager__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(168px, 1fr));
+  gap: 12px;
+}
+
+.file-manager__card {
+  background: rgba(9, 28, 58, 0.75);
+  border: 1px solid rgba(140, 220, 255, 0.16);
+  border-radius: 12px;
+  overflow: hidden;
+  cursor: pointer;
+  transition:
+    border-color 0.15s,
+    transform 0.15s,
+    box-shadow 0.15s;
+}
+
+.file-manager__card:hover {
+  border-color: rgba(110, 200, 255, 0.5);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(2, 10, 26, 0.5);
+}
+
+.file-manager__card.is-selected {
+  border-color: rgba(212, 175, 55, 0.8);
+  box-shadow: 0 0 0 1px rgba(212, 175, 55, 0.4), 0 8px 24px rgba(2, 10, 26, 0.5);
+}
+
+.file-manager__card-media {
+  height: 104px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(4, 14, 32, 0.6);
+  position: relative;
+  overflow: hidden;
+}
+
+.file-manager__card-media img {
+  width: 100%;
+  height: 100%;
   object-fit: cover;
-  border-radius: 4px;
+}
+
+.file-manager__card-kind {
+  position: absolute;
+  right: 6px;
+  top: 6px;
+  font-size: 11px;
+  padding: 1px 7px;
+  border-radius: 8px;
+  background: rgba(4, 12, 28, 0.72);
+  color: #bfe9ff;
+  border: 1px solid rgba(140, 220, 255, 0.25);
+}
+
+.file-manager__card-info {
+  padding: 8px 10px;
+}
+
+.file-manager__card-name {
+  font-size: 13px;
+  font-weight: 500;
+  color: #eaf6ff;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.file-manager__card-meta {
+  margin-top: 3px;
+  font-size: 11px;
+  color: #8fb6dd;
+  font-variant-numeric: tabular-nums;
+}
+
+.file-manager__card-actions {
+  display: none;
+  padding: 0 8px 8px;
+  gap: 2px;
+}
+
+.file-manager__card:hover .file-manager__card-actions {
+  display: flex;
+  flex-wrap: wrap;
+}
+
+/* 列表视图 */
+.file-manager__table {
+  --el-table-border-color: transparent;
+}
+
+.file-manager__thumb {
+  width: 32px;
+  height: 32px;
+  object-fit: cover;
+  border-radius: 6px;
 }
 
 .file-manager__name {
   cursor: pointer;
+  font-weight: 500;
 }
 
 .file-manager__name:hover {
-  color: var(--el-color-primary);
+  color: #6ec8ff;
 }
 
+/* 预览 */
 .file-manager__preview-image {
   text-align: center;
 }
 
 .file-manager__preview-toolbar {
-  margin-bottom: 8px;
+  margin-bottom: 10px;
 }
 
-.file-manager__markdown :deep(img) {
-  max-width: 100%;
+.file-manager__markdown {
+  font-size: 14px;
+  line-height: 1.8;
+  color: #cfddf0;
+}
+
+.file-manager__markdown :deep(h1),
+.file-manager__markdown :deep(h2),
+.file-manager__markdown :deep(h3) {
+  color: #eaf6ff;
+  border-bottom: 1px solid rgba(212, 175, 55, 0.35);
+  padding-bottom: 6px;
+}
+
+.file-manager__markdown :deep(code) {
+  background: rgba(110, 200, 255, 0.1);
+  color: #9fd4ff;
+  border-radius: 4px;
+  padding: 1px 6px;
 }
 
 .file-manager__markdown :deep(pre) {
-  background: #f6f8fa;
+  background: rgba(4, 14, 32, 0.8);
+  border: 1px solid rgba(140, 220, 255, 0.18);
+  border-radius: 8px;
   padding: 12px;
-  border-radius: 6px;
   overflow-x: auto;
 }
 
-.file-manager__move-toolbar {
-  display: flex;
-  gap: 8px;
-  margin-bottom: 8px;
+.file-manager__markdown :deep(pre code) {
+  background: transparent;
+  padding: 0;
 }
 
-.file-manager__move-item {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 4px;
-  cursor: pointer;
-  border-radius: 4px;
+.file-manager__markdown :deep(blockquote) {
+  border-left: 3px solid rgba(212, 175, 55, 0.6);
+  margin: 8px 0;
+  padding-left: 12px;
+  color: #9fb8d8;
 }
 
-.file-manager__move-item:hover {
-  background: var(--el-fill-color-light);
+.file-manager__markdown :deep(a) {
+  color: #6ec8ff;
 }
 
+/* 上传进度 */
+.file-manager__upload-progress {
+  margin-top: 12px;
+}
+
+/* 移动 */
 .file-manager__move-target {
-  margin-top: 8px;
-  color: var(--el-text-color-secondary);
+  margin-top: 10px;
+  color: #8fb6dd;
   font-size: 13px;
 }
 </style>

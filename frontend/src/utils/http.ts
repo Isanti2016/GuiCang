@@ -105,11 +105,12 @@ export async function del<T>(
   return response.data.data;
 }
 
-/** multipart 上传。 */
+/** multipart 上传（支持进度回调）。 */
 export async function uploadFile<T>(
   url: string,
   file: File,
   params?: Record<string, unknown>,
+  onProgress?: (percent: number) => void,
 ): Promise<T> {
   const formData = new FormData();
   formData.append("file", file);
@@ -117,8 +118,34 @@ export async function uploadFile<T>(
     params,
     headers: { "Content-Type": "multipart/form-data" },
     timeout: 0,
+    onUploadProgress: (event) => {
+      if (onProgress && event.total) {
+        onProgress(Math.round((event.loaded / event.total) * 100));
+      }
+    },
   });
   return response.data.data;
+}
+
+/** 以 Blob 下载文件（保留文件名，供「下载」按钮使用）。 */
+export async function downloadBlob(
+  url: string,
+  params?: Record<string, unknown>,
+): Promise<Blob> {
+  const response = await http.get(url, { params, responseType: "blob" });
+  return response.data as Blob;
+}
+
+/** 触发浏览器保存 Blob 为文件。 */
+export function saveBlob(blob: Blob, filename: string): void {
+  const objectUrl = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = objectUrl;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(objectUrl);
 }
 
 export default http;

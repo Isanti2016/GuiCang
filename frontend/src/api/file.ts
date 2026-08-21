@@ -1,5 +1,4 @@
-import { del, get, post, put, uploadFile } from "@/utils/http";
-import { getToken } from "@/utils/http";
+import { del, downloadBlob, get, getToken, post, put, saveBlob, uploadFile } from "@/utils/http";
 
 /** 文件/目录条目（与后端 FileEntry 对应）。 */
 export interface FileEntry {
@@ -55,4 +54,20 @@ export function streamUrl(path: string): string {
 /** 带 token 的缩略图 URL。 */
 export function thumbnailUrl(path: string): string {
   return `/api/v1/files/thumbnail?path=${encodeURIComponent(path)}&token=${getToken() ?? ""}`;
+}
+
+/** 上传（带进度回调）。 */
+export function uploadWithProgress(
+  path: string,
+  file: File,
+  onProgress?: (percent: number) => void,
+): Promise<FileEntry> {
+  return uploadFile<FileEntry>("/files/upload", file, { path }, onProgress);
+}
+
+/** 下载为文件（Blob，保留文件名）。 */
+export async function downloadFileAsBlob(path: string): Promise<void> {
+  const blob = await downloadBlob("/files/download", { path });
+  const name = path.includes("/") ? path.substring(path.lastIndexOf("/") + 1) : path;
+  saveBlob(blob, name);
 }
