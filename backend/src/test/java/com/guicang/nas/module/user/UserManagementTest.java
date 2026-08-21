@@ -268,7 +268,8 @@ class UserManagementTest {
                 .header("Authorization", bearer(adminToken)))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.code").value(ResultCodes.SUCCESS))
-        .andExpect(jsonPath("$.data[0].username").value("bob"));
+        .andExpect(jsonPath("$.data.records[0].username").value("bob"))
+        .andExpect(jsonPath("$.data.total").value(1));
   }
 
   @Test

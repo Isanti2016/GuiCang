@@ -19,6 +19,9 @@ public interface StorageService {
   /** 移动到目标路径。 */
   void move(String relativePath, String targetPath);
 
+  /** 移动到指定完整目标路径（同卷原子改名；用于回收站迁移/恢复）。 */
+  void moveTo(String sourceRelativePath, String targetRelativePath);
+
   /** 删除目录项（目录须为空或递归删除）。 */
   void delete(String relativePath, boolean recursive);
 

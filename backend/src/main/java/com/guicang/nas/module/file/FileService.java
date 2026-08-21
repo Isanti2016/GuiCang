@@ -20,8 +20,20 @@ public interface FileService {
   /** 移动（源需 WRITE，目标目录需 WRITE）。 */
   void move(String path, String target);
 
-  /** 删除（需 WRITE 权限；目录默认须为空，recursive 时递归删除）。 */
+  /** 删除（软删除：移入回收站，可恢复；需 WRITE 权限）。 */
   void delete(String path, boolean recursive);
+
+  /** 回收站列表（管理员可见全部，普通用户仅本人）。 */
+  List<TrashItem> listTrash();
+
+  /** 恢复回收站条目到原路径（原位置被占用时提示）。 */
+  void restoreTrash(Long id);
+
+  /** 彻底删除回收站条目（不可恢复）。 */
+  void purgeTrash(Long id);
+
+  /** 清空回收站（管理员或本人）。 */
+  void emptyTrash();
 
   /** 上传文件到目录（需 WRITE 权限；校验大小与扩展名；流式写盘 + 原子改名）。 */
   FileEntry upload(String dirPath, MultipartFile file);

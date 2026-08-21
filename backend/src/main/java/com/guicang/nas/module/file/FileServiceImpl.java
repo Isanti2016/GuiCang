@@ -9,10 +9,13 @@ import com.guicang.nas.infra.storage.FileEntry;
 import com.guicang.nas.infra.storage.FileTypeUtils;
 import com.guicang.nas.infra.storage.StorageService;
 import com.guicang.nas.infra.thumbnail.ThumbnailService;
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.guicang.nas.common.security.AuthenticatedUser;
 import com.guicang.nas.module.file.dto.FileStreamInfo;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 import org.springframework.beans.factory.annotation.Value;
@@ -29,6 +32,7 @@ public class FileServiceImpl implements FileService {
   private final DirPermissionService dirPermissionService;
   private final ThumbnailService thumbnailService;
   private final FileIndexService fileIndexService;
+  private final TrashItemMapper trashItemMapper;
 
   @Value("${guicang.file.max-upload-size-bytes:1073741824}")
   private long maxUploadSizeBytes;
@@ -45,11 +49,13 @@ public class FileServiceImpl implements FileService {
       StorageService storageService,
       DirPermissionService dirPermissionService,
       ThumbnailService thumbnailService,
-      FileIndexService fileIndexService) {
+      FileIndexService fileIndexService,
+      TrashItemMapper trashItemMapper) {
     this.storageService = storageService;
     this.dirPermissionService = dirPermissionService;
     this.thumbnailService = thumbnailService;
     this.fileIndexService = fileIndexService;
+    this.trashItemMapper = trashItemMapper;
   }
 
   @Override

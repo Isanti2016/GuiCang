@@ -49,8 +49,23 @@ export interface UserUpdateRequest {
   quotaBytes?: number | null
 }
 
-export function fetchUsers(page: number, size: number, keyword?: string): Promise<UserVO[]> {
-  return get<UserVO[]>('/users', { page, size, keyword: keyword || undefined })
+export interface UserPage {
+  records: UserVO[]
+  total: number
+}
+
+export function fetchUsers(
+  page: number,
+  size: number,
+  keyword?: string,
+  enabled?: boolean,
+): Promise<UserPage> {
+  return get<UserPage>('/users', {
+    page,
+    size,
+    keyword: keyword || undefined,
+    enabled: enabled === undefined ? undefined : enabled ? 1 : 0,
+  })
 }
 
 export function createUser(data: UserCreateRequest): Promise<UserVO> {

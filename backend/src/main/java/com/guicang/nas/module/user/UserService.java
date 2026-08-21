@@ -1,6 +1,7 @@
 package com.guicang.nas.module.user;
 
 import com.guicang.nas.module.user.dto.UserCreateRequest;
+import com.guicang.nas.module.user.dto.UserPage;
 import com.guicang.nas.module.user.dto.UserPasswordRequest;
 import com.guicang.nas.module.user.dto.UserStatusRequest;
 import com.guicang.nas.module.user.dto.UserUpdateRequest;
@@ -27,7 +28,7 @@ public interface UserService {
   void deleteUser(String username, boolean removeHome);
 
   /** 用户列表（分页 + 关键字）。 */
-  List<UserVO> listUsers(long page, long size, String keyword);
+  UserPage listUsers(long page, long size, String keyword);
 
   /** 用户详情。 */
   UserVO getUser(String username);

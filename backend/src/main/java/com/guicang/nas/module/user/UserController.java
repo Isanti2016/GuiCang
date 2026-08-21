@@ -2,6 +2,7 @@ package com.guicang.nas.module.user;
 
 import com.guicang.nas.common.Result;
 import com.guicang.nas.module.user.dto.UserCreateRequest;
+import com.guicang.nas.module.user.dto.UserPage;
 import com.guicang.nas.module.user.dto.UserPasswordRequest;
 import com.guicang.nas.module.user.dto.UserStatusRequest;
 import com.guicang.nas.module.user.dto.UserUpdateRequest;
@@ -10,7 +11,6 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
-import java.util.List;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -38,7 +38,7 @@ public class UserController {
 
   /** 用户列表（分页 + 关键字）。 */
   @GetMapping
-  public Result<List<UserVO>> list(
+  public Result<UserPage> list(
       @RequestParam(defaultValue = "1") @Min(1) long page,
       @RequestParam(defaultValue = "20") @Min(1) @Max(100) long size,
       @RequestParam(required = false) String keyword) {

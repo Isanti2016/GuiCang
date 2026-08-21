@@ -96,6 +96,29 @@ public class StorageServiceImpl implements StorageService {
   }
 
   @Override
+  public void moveTo(String sourceRelativePath, String targetRelativePath) {
+    Path source = PathUtils.resolve(storageRoot, sourceRelativePath);
+    PathUtils.checkRealPath(storageRoot, source);
+    Path target = PathUtils.resolve(storageRoot, targetRelativePath);
+    PathUtils.checkRealPath(storageRoot, target);
+    if (!Files.exists(source)) {
+      throw new BizException("不存在: " + sourceRelativePath);
+    }
+    if (Files.exists(target)) {
+      throw new BizException("目标已存在: " + targetRelativePath);
+    }
+    Path parent = target.getParent();
+    if (parent != null && !Files.isDirectory(parent)) {
+      throw new BizException("目标目录不存在: " + parent);
+    }
+    try {
+      Files.move(source, target, StandardCopyOption.ATOMIC_MOVE);
+    } catch (IOException e) {
+      throw new BizException("移动失败: " + sourceRelativePath);
+    }
+  }
+
+  @Override
   public void delete(String relativePath, boolean recursive) {
     Path target = PathUtils.resolve(storageRoot, relativePath);
     PathUtils.checkRealPath(storageRoot, target);

@@ -7,6 +7,7 @@ import com.guicang.nas.infra.account.ProvisionResult;
 import com.guicang.nas.infra.account.ProvisionStatus;
 import com.guicang.nas.infra.account.SystemAccountProvisioner;
 import com.guicang.nas.module.user.dto.UserCreateRequest;
+import com.guicang.nas.module.user.dto.UserPage;
 import com.guicang.nas.module.user.dto.UserPasswordRequest;
 import com.guicang.nas.module.user.dto.UserStatusRequest;
 import com.guicang.nas.module.user.dto.UserUpdateRequest;
@@ -138,19 +139,22 @@ public class UserServiceImpl implements UserService {
   }
 
   @Override
-  public List<UserVO> listUsers(long page, long size, String keyword) {
+  public UserPage listUsers(long page, long size, String keyword) {
     LambdaQueryWrapper<SysUser> wrapper = new LambdaQueryWrapper<>();
     if (keyword != null && !keyword.isBlank()) {
       wrapper.like(SysUser::getUsername, keyword).or().like(SysUser::getDisplayName, keyword);
     }
+    long total = sysUserMapper.selectCount(wrapper);
     wrapper.orderByDesc(SysUser::getId);
     List<SysUser> users = sysUserMapper.selectList(wrapper);
     long skip = (page - 1) * size;
-    return users.stream()
-        .skip(skip)
-        .limit(size)
-        .map(u -> toVO(u, requireRole(u.getRoleId())))
-        .toList();
+    List<UserVO> records =
+        users.stream()
+            .skip(skip)
+            .limit(size)
+            .map(u -> toVO(u, requireRole(u.getRoleId())))
+            .toList();
+    return new UserPage(records, total);
   }
 
   @Override
