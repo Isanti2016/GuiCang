@@ -14,8 +14,12 @@ const overview = ref<HostMetrics | null>(null);
 
 const trendRef = ref<HTMLElement | null>(null);
 const diskRef = ref<HTMLElement | null>(null);
+const fileTypeRef = ref<HTMLElement | null>(null);
+const userStorageRef = ref<HTMLElement | null>(null);
 const { setOption: setTrendOption } = useECharts(trendRef);
 const { setOption: setDiskOption } = useECharts(diskRef);
+const { setOption: setFileTypeOption, clear: clearFileType } = useECharts(fileTypeRef);
+const { setOption: setUserStorageOption, clear: clearUserStorage } = useECharts(userStorageRef);
 
 const formatBytes = (kb: number): string => {
   if (kb <= 0) return "0 B";
@@ -89,10 +93,94 @@ function renderDisk(): void {
   });
 }
 
+function renderFileType(): void {
+  const s = summary.value;
+  if (!s) return;
+  const data = [
+    { name: "图片", value: s.fileImages },
+    { name: "视频", value: s.fileVideos },
+    { name: "文档", value: s.fileNotes },
+    { name: "其他", value: Math.max(0, s.fileTotal - s.fileImages - s.fileVideos - s.fileNotes) },
+  ].filter((d) => d.value > 0);
+  if (data.length === 0) {
+    clearFileType();
+    return;
+  }
+  setFileTypeOption({
+    tooltip: { trigger: "item", formatter: "{b}: {c} 个 ({d}%)" },
+    legend: { bottom: 0, textStyle: { color: "#9fc6ea" } },
+    series: [
+      {
+        type: "pie",
+        radius: ["42%", "68%"],
+        center: ["50%", "44%"],
+        itemStyle: { borderColor: "rgba(6,18,40,0.9)", borderWidth: 2 },
+        label: { color: "#bfe9ff" },
+        data,
+        color: ["#409eff", "#d4af37", "#67c23a", "#9fc6ea"],
+      },
+    ],
+  });
+}
+
+function renderUserStorage(): void {
+  const list = summary.value?.userStorage ?? [];
+  if (list.length === 0) {
+    clearUserStorage();
+    return;
+  }
+  const sorted = [...list].sort((a, b) => b.bytes - a.bytes).slice(0, 10);
+  setUserStorageOption({
+    tooltip: {
+      trigger: "axis",
+      axisPointer: { type: "shadow" },
+      formatter: (params: Array<{ name: string; value: number }>) => {
+        const p = params[0];
+        return `${p.name}<br/>占用 ${formatBytes(p.value / 1024)} · ${list.find((u) => u.username === p.name)?.fileCount ?? 0} 个文件`;
+      },
+    },
+    grid: { left: 50, right: 16, top: 16, bottom: 32 },
+    xAxis: {
+      type: "category",
+      data: sorted.map((u) => u.username),
+      axisLabel: { color: "#9fc6ea" },
+      axisLine: { lineStyle: { color: "rgba(126,210,255,0.3)" } },
+    },
+    yAxis: {
+      type: "value",
+      axisLabel: {
+        color: "#9fc6ea",
+        formatter: (v: number) => formatBytes(v),
+      },
+      splitLine: { lineStyle: { color: "rgba(126,210,255,0.12)" } },
+    },
+    series: [
+      {
+        type: "bar",
+        barWidth: "46%",
+        data: sorted.map((u) => u.bytes / 1024),
+        itemStyle: {
+          borderRadius: [4, 4, 0, 0],
+          color: {
+            type: "linear",
+            x: 0, y: 0, x2: 0, y2: 1,
+            colorStops: [
+              { offset: 0, color: "#6ec8ff" },
+              { offset: 1, color: "#2b6fd4" },
+            ],
+          },
+        },
+      },
+    ],
+  });
+}
+
 async function loadData(): Promise<void> {
   try {
     summary.value = await fetchDashboardSummary();
     renderDisk();
+    renderFileType();
+    renderUserStorage();
   } catch {
     // 错误提示由拦截器处理
   }
@@ -206,6 +294,19 @@ const actionLabel = (action: string): string => {
       <el-col :span="8">
         <el-card shadow="hover" header="磁盘占用">
           <div ref="diskRef" class="dashboard__chart" />
+        </el-card>
+      </el-col>
+    </el-row>
+
+    <el-row :gutter="16" class="dashboard__charts">
+      <el-col :span="12">
+        <el-card shadow="hover" header="文件类型分布">
+          <div ref="fileTypeRef" class="dashboard__chart" />
+        </el-card>
+      </el-col>
+      <el-col :span="12">
+        <el-card shadow="hover" header="用户存储占用">
+          <div ref="userStorageRef" class="dashboard__chart" />
         </el-card>
       </el-col>
     </el-row>

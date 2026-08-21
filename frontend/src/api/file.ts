@@ -46,6 +46,11 @@ export function searchFiles(q: string): Promise<FileEntry[]> {
   return get<FileEntry[]>("/files/search", { q });
 }
 
+/** 递归收集图片/视频（相册数据源）。 */
+export function fetchMedia(path = ""): Promise<FileEntry[]> {
+  return get<FileEntry[]>("/files/media", { path });
+}
+
 /** 带 token 的流媒体 URL（img/video 标签用）。 */
 export function streamUrl(path: string): string {
   return `/api/v1/files/stream?path=${encodeURIComponent(path)}&token=${getToken() ?? ""}`;
@@ -63,6 +68,33 @@ export function uploadWithProgress(
   onProgress?: (percent: number) => void,
 ): Promise<FileEntry> {
   return uploadFile<FileEntry>("/files/upload", file, { path }, onProgress);
+}
+
+/** 回收站条目（与后端 TrashItem 对应）。 */
+export interface TrashItem {
+  id: number;
+  originalPath: string;
+  trashPath: string;
+  username: string;
+  kind: string;
+  size: number | null;
+  deletedAt: number;
+}
+
+export function fetchTrash(): Promise<TrashItem[]> {
+  return get<TrashItem[]>("/files/trash");
+}
+
+export function restoreTrash(id: number): Promise<void> {
+  return post<void>(`/files/trash/${id}/restore`);
+}
+
+export function purgeTrash(id: number): Promise<void> {
+  return del<void>(`/files/trash/${id}`);
+}
+
+export function emptyTrash(): Promise<void> {
+  return del<void>("/files/trash");
 }
 
 /** 下载为文件（Blob，保留文件名）。 */

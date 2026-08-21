@@ -1,4 +1,4 @@
-import { get, post } from "@/utils/http";
+import { get, post, put } from "@/utils/http";
 
 /** 当前用户信息。 */
 export interface CurrentUserInfo {
@@ -30,4 +30,8 @@ export function fetchMe(): Promise<CurrentUserInfo> {
 
 export function logout(): Promise<void> {
   return post<void>("/auth/logout");
+}
+
+export function changePassword(oldPassword: string, newPassword: string): Promise<void> {
+  return put<void>("/auth/password", { oldPassword, newPassword });
 }

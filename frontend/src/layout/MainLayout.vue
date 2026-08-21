@@ -1,8 +1,10 @@
 <script setup lang="ts">
-import { computed, onMounted } from "vue";
+import { computed, onMounted, reactive, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
+import { ElMessage, type FormInstance, type FormRules } from "element-plus";
 import TechBackground from "@/components/TechBackground.vue";
 import { useAuthStore } from "@/stores/auth";
+import { changePassword } from "@/api/auth";
 
 const route = useRoute();
 const router = useRouter();
@@ -16,6 +18,8 @@ const menus = computed(() => {
   const items = [
     { path: "/dashboard", title: "监控大屏", icon: "Odometer" },
     { path: "/files", title: "文件管理", icon: "Folder" },
+    { path: "/gallery", title: "相册", icon: "Picture" },
+    { path: "/trash", title: "回收站", icon: "Delete" },
     { path: "/admin/users", title: "用户管理", icon: "User", adminOnly: true },
     { path: "/admin/roles", title: "角色与权限", icon: "Lock", adminOnly: true },
     { path: "/sync", title: "同步任务", icon: "Clock", adminOnly: true },
@@ -29,11 +33,68 @@ async function handleLogout(): Promise<void> {
   await router.replace("/login");
 }
 
+const pwdDialogOpen = ref(false);
+const pwdFormRef = ref<FormInstance | null>(null);
+const pwdSubmitting = ref(false);
+const pwdForm = reactive({
+  oldPassword: "",
+  newPassword: "",
+  confirmPassword: "",
+});
+
+const pwdRules: FormRules = {
+  oldPassword: [{ required: true, message: "请输入当前密码", trigger: "blur" }],
+  newPassword: [
+    { required: true, message: "请输入新密码", trigger: "blur" },
+    { min: 8, message: "新密码至少 8 位", trigger: "blur" },
+  ],
+  confirmPassword: [
+    { required: true, message: "请再次输入新密码", trigger: "blur" },
+    {
+      validator: (_rule, value: string, callback) => {
+        if (value !== pwdForm.newPassword) {
+          callback(new Error("两次输入的密码不一致"));
+        } else {
+          callback();
+        }
+      },
+      trigger: "blur",
+    },
+  ],
+};
+
+function openPasswordDialog(): void {
+  pwdForm.oldPassword = "";
+  pwdForm.newPassword = "";
+  pwdForm.confirmPassword = "";
+  pwdDialogOpen.value = true;
+}
+
+async function submitPassword(): Promise<void> {
+  const form = pwdFormRef.value;
+  if (!form) return;
+  const valid = await form.validate().catch(() => false);
+  if (!valid) return;
+  pwdSubmitting.value = true;
+  try {
+    await changePassword(pwdForm.oldPassword, pwdForm.newPassword);
+    ElMessage.success("密码修改成功，请重新登录");
+    pwdDialogOpen.value = false;
+    await handleLogout();
+  } catch {
+    // 错误提示由拦截器处理
+  } finally {
+    pwdSubmitting.value = false;
+  }
+}
+
 async function handleCommand(command: string): Promise<void> {
   if (command === "logout") {
     await handleLogout();
   } else if (command === "help") {
     await router.push("/help");
+  } else if (command === "password") {
+    openPasswordDialog();
   }
 }
 
@@ -71,8 +132,9 @@ onMounted(() => {
           </span>
           <template #dropdown>
             <el-dropdown-menu>
-              <el-dropdown-item command="logout">退出登录</el-dropdown-item>
+              <el-dropdown-item command="password">修改密码</el-dropdown-item>
               <el-dropdown-item command="help" divided>使用手册</el-dropdown-item>
+              <el-dropdown-item command="logout" divided>退出登录</el-dropdown-item>
             </el-dropdown-menu>
           </template>
         </el-dropdown>
@@ -83,6 +145,39 @@ onMounted(() => {
       </el-main>
     </el-container>
     </el-container>
+
+    <el-dialog
+      v-model="pwdDialogOpen"
+      title="修改密码"
+      width="420px"
+      align-center
+      append-to-body
+      class="main-layout__pwd-dialog"
+    >
+      <el-form
+        ref="pwdFormRef"
+        :model="pwdForm"
+        :rules="pwdRules"
+        label-width="90px"
+        @submit.prevent="submitPassword"
+      >
+        <el-form-item label="当前密码" prop="oldPassword">
+          <el-input v-model="pwdForm.oldPassword" type="password" show-password />
+        </el-form-item>
+        <el-form-item label="新密码" prop="newPassword">
+          <el-input v-model="pwdForm.newPassword" type="password" show-password />
+        </el-form-item>
+        <el-form-item label="确认新密码" prop="confirmPassword">
+          <el-input v-model="pwdForm.confirmPassword" type="password" show-password />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="pwdDialogOpen = false">取消</el-button>
+        <el-button type="primary" :loading="pwdSubmitting" @click="submitPassword">
+          确认修改
+        </el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -181,5 +276,14 @@ onMounted(() => {
   /* 内容区透明，由全局深色科技背景承接 */
   background: transparent;
   padding: 16px;
+}
+
+.main-layout__pwd-dialog {
+  --el-dialog-bg-color: rgba(6, 20, 44, 0.96);
+  --el-dialog-border-radius: 14px;
+}
+
+.main-layout__pwd-dialog :deep(.el-dialog__title) {
+  color: #eaf6ff;
 }
 </style>

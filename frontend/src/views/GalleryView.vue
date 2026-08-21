@@ -1,0 +1,359 @@
+<script setup lang="ts">
+import { computed, onBeforeUnmount, onMounted, ref } from "vue";
+import {
+  fetchMedia,
+  streamUrl,
+  thumbnailUrl,
+  type FileEntry,
+} from "@/api/file";
+
+const entries = ref<FileEntry[]>([]);
+const loading = ref(false);
+const filter = ref<"all" | "image" | "video">("all");
+
+const filtered = computed(() =>
+  filter.value === "all" ? entries.value : entries.value.filter((e) => e.kind === filter.value),
+);
+
+const imageCount = computed(() => entries.value.filter((e) => e.kind === "image").length);
+const videoCount = computed(() => entries.value.filter((e) => e.kind === "video").length);
+
+const lightboxOpen = ref(false);
+const lightboxIndex = ref(0);
+const lightboxList = computed(() =>
+  filter.value === "all"
+    ? entries.value
+    : entries.value.filter((e) => e.kind === filter.value),
+);
+
+function openLightbox(index: number): void {
+  lightboxIndex.value = index;
+  lightboxOpen.value = true;
+}
+
+function prev(): void {
+  lightboxIndex.value =
+    (lightboxIndex.value - 1 + lightboxList.value.length) % lightboxList.value.length;
+}
+
+function next(): void {
+  lightboxIndex.value = (lightboxIndex.value + 1) % lightboxList.value.length;
+}
+
+function onKeydown(e: KeyboardEvent): void {
+  if (!lightboxOpen.value) return;
+  if (e.key === "ArrowLeft") prev();
+  else if (e.key === "ArrowRight") next();
+  else if (e.key === "Escape") lightboxOpen.value = false;
+}
+
+const current = computed<FileEntry | null>(() => lightboxList.value[lightboxIndex.value] ?? null);
+const currentName = computed(() => current.value?.name ?? "");
+
+async function load(): Promise<void> {
+  loading.value = true;
+  try {
+    entries.value = await fetchMedia("");
+  } catch {
+    // 错误提示由拦截器处理
+  } finally {
+    loading.value = false;
+  }
+}
+
+onMounted(() => {
+  void load();
+  window.addEventListener("keydown", onKeydown);
+});
+
+onBeforeUnmount(() => {
+  window.removeEventListener("keydown", onKeydown);
+});
+</script>
+
+<template>
+  <div class="gallery">
+    <el-card shadow="never" class="gallery__panel">
+      <template #header>
+        <div class="gallery__header">
+          <div class="gallery__title-wrap">
+            <span class="gallery__title">相册</span>
+            <span class="gallery__count">
+              {{ imageCount }} 张图片 · {{ videoCount }} 个视频
+            </span>
+          </div>
+          <el-segmented v-model="filter" :options="[
+            { label: `全部（${entries.length}）`, value: 'all' },
+            { label: `图片（${imageCount}）`, value: 'image' },
+            { label: `视频（${videoCount}）`, value: 'video' },
+          ]" />
+        </div>
+      </template>
+
+      <div v-loading="loading" class="gallery__body">
+        <div v-if="filtered.length === 0 && !loading" class="gallery__empty">
+          还没有媒体文件，去「文件管理」上传图片或视频吧
+        </div>
+        <div v-else class="gallery__waterfall">
+          <div
+            v-for="(entry, index) in filtered"
+            :key="entry.path"
+            class="gallery__item"
+            @click="openLightbox(index)"
+          >
+            <img
+              v-if="entry.kind === 'image'"
+              :src="thumbnailUrl(entry.path)"
+              :alt="entry.name"
+              loading="lazy"
+            />
+            <div v-else class="gallery__video">
+              <img :src="thumbnailUrl(entry.path)" :alt="entry.name" loading="lazy" />
+              <span class="gallery__video-badge">
+                <el-icon><VideoPlay /></el-icon>
+              </span>
+            </div>
+            <div class="gallery__item-mask">
+              <span class="gallery__item-name">{{ entry.name }}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </el-card>
+
+    <el-dialog
+      v-model="lightboxOpen"
+      class="gallery__lightbox"
+      width="min(1100px, 92vw)"
+      :show-close="true"
+      append-to-body
+      align-center
+    >
+      <template #header>
+        <span class="gallery__lightbox-title">{{ currentName }}</span>
+      </template>
+      <div class="gallery__lightbox-body">
+        <button class="gallery__nav gallery__nav--prev" aria-label="上一张" @click="prev">
+          <el-icon><ArrowLeft /></el-icon>
+        </button>
+        <img
+          v-if="current?.kind === 'image'"
+          :src="current ? streamUrl(current.path) : ''"
+          :alt="currentName"
+          class="gallery__lightbox-media"
+        />
+        <video
+          v-else-if="current?.kind === 'video'"
+          :src="current ? streamUrl(current.path) : ''"
+          controls
+          autoplay
+          class="gallery__lightbox-media"
+        />
+        <button class="gallery__nav gallery__nav--next" aria-label="下一张" @click="next">
+          <el-icon><ArrowRight /></el-icon>
+        </button>
+      </div>
+      <template #footer>
+        <div class="gallery__lightbox-footer">
+          <span>{{ lightboxIndex + 1 }} / {{ lightboxList.length }}</span>
+        </div>
+      </template>
+    </el-dialog>
+  </div>
+</template>
+
+<style scoped>
+.gallery {
+  position: relative;
+  z-index: 1;
+}
+
+.gallery__panel {
+  border: 1px solid rgba(126, 210, 255, 0.18);
+  background: linear-gradient(160deg, rgba(8, 26, 54, 0.72), rgba(4, 16, 38, 0.78));
+  backdrop-filter: blur(10px);
+  border-radius: 14px;
+  box-shadow: 0 10px 40px rgba(2, 10, 26, 0.55);
+}
+
+.gallery__panel :deep(.el-card__header) {
+  border-bottom: 1px solid rgba(212, 175, 55, 0.22);
+}
+
+.gallery__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.gallery__title {
+  font-size: 17px;
+  font-weight: 600;
+  color: #eaf6ff;
+  letter-spacing: 1px;
+}
+
+.gallery__count {
+  margin-left: 12px;
+  font-size: 12px;
+  color: rgba(159, 198, 234, 0.75);
+}
+
+.gallery__body {
+  min-height: 260px;
+}
+
+.gallery__empty {
+  padding: 80px 0;
+  text-align: center;
+  color: rgba(159, 198, 234, 0.6);
+}
+
+.gallery__waterfall {
+  columns: 5 220px;
+  column-gap: 14px;
+}
+
+.gallery__item {
+  position: relative;
+  display: inline-block;
+  width: 100%;
+  margin-bottom: 14px;
+  border-radius: 10px;
+  overflow: hidden;
+  cursor: zoom-in;
+  border: 1px solid rgba(126, 210, 255, 0.16);
+  background: rgba(10, 30, 60, 0.5);
+  transition:
+    transform 0.25s ease,
+    border-color 0.25s ease,
+    box-shadow 0.25s ease;
+}
+
+.gallery__item:hover {
+  transform: translateY(-3px);
+  border-color: rgba(212, 175, 55, 0.55);
+  box-shadow: 0 8px 26px rgba(2, 10, 26, 0.6);
+}
+
+.gallery__item img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.gallery__video {
+  position: relative;
+}
+
+.gallery__video-badge {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: rgba(3, 12, 28, 0.72);
+  color: #d4af37;
+  font-size: 15px;
+  border: 1px solid rgba(212, 175, 55, 0.5);
+}
+
+.gallery__item-mask {
+  position: absolute;
+  inset: auto 0 0 0;
+  padding: 8px 10px;
+  background: linear-gradient(180deg, transparent, rgba(3, 12, 28, 0.85));
+  opacity: 0;
+  transition: opacity 0.25s ease;
+}
+
+.gallery__item:hover .gallery__item-mask {
+  opacity: 1;
+}
+
+.gallery__item-name {
+  font-size: 12px;
+  color: #eaf6ff;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  display: block;
+}
+
+.gallery__lightbox-title {
+  color: #eaf6ff;
+  font-size: 15px;
+}
+
+.gallery__lightbox-body {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 60vh;
+}
+
+.gallery__lightbox-media {
+  max-width: 100%;
+  max-height: 68vh;
+  border-radius: 8px;
+  box-shadow: 0 14px 50px rgba(2, 10, 26, 0.7);
+}
+
+.gallery__nav {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  border: 1px solid rgba(212, 175, 55, 0.45);
+  background: rgba(3, 12, 28, 0.6);
+  color: #d4af37;
+  cursor: pointer;
+  font-size: 18px;
+  transition: background 0.2s ease;
+}
+
+.gallery__nav:hover {
+  background: rgba(212, 175, 55, 0.2);
+}
+
+.gallery__nav--prev {
+  left: -22px;
+}
+
+.gallery__nav--next {
+  right: -22px;
+}
+
+.gallery__lightbox-footer {
+  display: flex;
+  justify-content: center;
+  color: rgba(159, 198, 234, 0.8);
+  font-size: 13px;
+}
+
+.gallery__panel :deep(.el-segmented) {
+  --el-segmented-bg-color: rgba(3, 12, 28, 0.55);
+  --el-segmented-item-selected-bg-color: rgba(110, 200, 255, 0.18);
+  --el-segmented-item-selected-color: #bfe9ff;
+  --el-segmented-item-hover-bg-color: rgba(110, 200, 255, 0.1);
+  --el-segmented-item-hover-color: #bfe9ff;
+  --el-segmented-item-active-bg-color: rgba(110, 200, 255, 0.16);
+}
+
+.gallery__panel :deep(.el-dialog) {
+  --el-dialog-bg-color: rgba(6, 20, 44, 0.96);
+}
+</style>

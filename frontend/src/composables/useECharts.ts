@@ -26,5 +26,10 @@ export function useECharts(container: Ref<HTMLElement | null>) {
     chart?.setOption(option);
   }
 
-  return { setOption };
+  /** 清空画布（用于无数据场景）。 */
+  function clear(): void {
+    chart?.clear();
+  }
+
+  return { setOption, clear };
 }

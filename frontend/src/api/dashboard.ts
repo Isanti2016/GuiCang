@@ -22,6 +22,13 @@ export interface DashboardSummary {
   userTotal: number;
   userEnabled: number;
   recentOperations: RecentOperation[];
+  userStorage: UserStorageUsage[];
+}
+
+export interface UserStorageUsage {
+  username: string;
+  bytes: number;
+  fileCount: number;
 }
 
 export function fetchDashboardSummary(): Promise<DashboardSummary> {

@@ -30,6 +30,18 @@ const routes: RouteRecordRaw[] = [
         meta: { title: "文件管理" },
       },
       {
+        path: "gallery",
+        name: "gallery",
+        component: () => import("@/views/GalleryView.vue"),
+        meta: { title: "相册" },
+      },
+      {
+        path: "trash",
+        name: "trash",
+        component: () => import("@/views/TrashView.vue"),
+        meta: { title: "回收站" },
+      },
+      {
         path: "admin/users",
         name: "admin-users",
         component: () => import("@/views/UserView.vue"),
