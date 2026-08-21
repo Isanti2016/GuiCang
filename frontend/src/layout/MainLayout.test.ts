@@ -45,7 +45,7 @@ describe("MainLayout 菜单权限", () => {
     expect(text).toContain("操作记录");
   });
 
-  it("member 只看到大屏与文件菜单", async () => {
+  it("member 只看到非管理菜单（大屏/文件/相册/回收站）", async () => {
     const pinia = createPinia();
     const store = useAuthStore(pinia);
     store.token = "jwt-token";
@@ -60,7 +60,10 @@ describe("MainLayout 菜单权限", () => {
     const text = mountLayout(pinia).text();
     expect(text).toContain("监控大屏");
     expect(text).toContain("文件管理");
+    expect(text).toContain("相册");
+    expect(text).toContain("回收站");
     expect(text).not.toContain("同步任务");
     expect(text).not.toContain("操作记录");
+    expect(text).not.toContain("用户管理");
   });
 });

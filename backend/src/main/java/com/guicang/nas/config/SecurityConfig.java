@@ -27,7 +27,7 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
 /**
  * Spring Security 过滤器链（手册 3.3）： CorsFilter → JwtAuthenticationFilter → ExceptionTranslationFilter →
- * AuthorizationFilter。 放行：登录、初始化向导、hello；其余需认证；未认证/无权限统一返回 Result JSON。
+ * AuthorizationFilter。 放行：登录、初始化向导；其余需认证；未认证/无权限统一返回 Result JSON。
  */
 @Configuration
 @EnableWebSecurity
@@ -48,8 +48,7 @@ public class SecurityConfig {
         .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
         .authorizeHttpRequests(
             auth ->
-                auth.requestMatchers(
-                        "/api/v1/auth/login", "/api/v1/setup/**", "/api/v1/hello", "/error")
+                auth.requestMatchers("/api/v1/auth/login", "/api/v1/setup/**", "/error")
                     .permitAll()
                     .anyRequest()
                     .authenticated())
