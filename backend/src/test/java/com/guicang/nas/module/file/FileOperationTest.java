@@ -95,15 +95,6 @@ class FileOperationTest {
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.data[?(@.name=='shared')].dir").value(true));
 
-    // 非空目录非递归删除被拒
-    mockMvc
-        .perform(
-            delete("/api/v1/files")
-                .header("Authorization", bearer(adminToken))
-                .param("path", "shared/team"))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.code").value(ResultCodes.BIZ_ERROR));
-
     // rename
     mockMvc
         .perform(
@@ -122,13 +113,12 @@ class FileOperationTest {
                 .content("{\"path\":\"shared/team/notes\",\"target\":\".\"}"))
         .andExpect(status().isOk());
 
-    // 递归删除（team 现已空，非递归也能删；这里验证递归路径）
+    // 删除（软删除进回收站）：目录已空
     mockMvc
         .perform(
             delete("/api/v1/files")
                 .header("Authorization", bearer(adminToken))
-                .param("path", "shared/team")
-                .param("recursive", "true"))
+                .param("path", "shared/team"))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.code").value(ResultCodes.SUCCESS));
   }

@@ -1,5 +1,6 @@
 package com.guicang.nas.module.file;
 
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.guicang.nas.common.BizException;
 import com.guicang.nas.common.ResultCodes;
 import com.guicang.nas.common.audit.Audit;
@@ -9,13 +10,10 @@ import com.guicang.nas.infra.storage.FileEntry;
 import com.guicang.nas.infra.storage.FileTypeUtils;
 import com.guicang.nas.infra.storage.StorageService;
 import com.guicang.nas.infra.thumbnail.ThumbnailService;
-import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import com.guicang.nas.common.security.AuthenticatedUser;
 import com.guicang.nas.module.file.dto.FileStreamInfo;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 import org.springframework.beans.factory.annotation.Value;
@@ -44,6 +42,7 @@ public class FileServiceImpl implements FileService {
   private long maxTextSizeBytes;
 
   private static final Set<String> TEXT_EXTENSIONS = Set.of("md", "txt", "markdown");
+  private static final String TRASH_DIR = ".guicang-trash";
 
   public FileServiceImpl(
       StorageService storageService,
@@ -102,8 +101,101 @@ public class FileServiceImpl implements FileService {
   public void delete(String path, boolean recursive) {
     AuthenticatedUser user = requireUser();
     dirPermissionService.check(user.username(), authorities(), path, DirPerm.WRITE);
-    storageService.delete(path, recursive);
+    // 软删除：移入回收站目录（.guicang-trash/），记录 trash_item 供恢复
+    String name = path.contains("/") ? path.substring(path.lastIndexOf("/") + 1) : path;
+    String trashPath = TRASH_DIR + "/" + System.currentTimeMillis() + "-" + name;
+    storageService.moveTo(path, trashPath);
+    TrashItem item = new TrashItem();
+    item.setOriginalPath(path);
+    item.setTrashPath(trashPath);
+    item.setUsername(user.username());
+    item.setKind(FileTypeUtils.kind(name));
+    item.setSize(safeSize(path));
+    item.setDeletedAt(System.currentTimeMillis());
+    trashItemMapper.insert(item);
     fileIndexService.remove(path);
+  }
+
+  @Override
+  public List<TrashItem> listTrash() {
+    AuthenticatedUser user = requireUser();
+    if (isAdmin(user)) {
+      return trashItemMapper.selectList(
+          new LambdaQueryWrapper<TrashItem>().orderByDesc(TrashItem::getDeletedAt));
+    }
+    return trashItemMapper.selectList(
+        new LambdaQueryWrapper<TrashItem>()
+            .eq(TrashItem::getUsername, user.username())
+            .orderByDesc(TrashItem::getDeletedAt));
+  }
+
+  @Override
+  @Audit(action = "file.restore", resource = "#id")
+  public void restoreTrash(Long id) {
+    AuthenticatedUser user = requireUser();
+    TrashItem item = requireTrashItem(id, user);
+    // 原位置已存在时 moveTo 会拒绝，转成更明确的提示（避免覆盖）
+    try {
+      storageService.moveTo(item.getTrashPath(), item.getOriginalPath());
+    } catch (BizException e) {
+      if (e.getMessage().contains("目标已存在")) {
+        throw new BizException("原位置已存在同名项，请先处理再恢复: " + item.getOriginalPath());
+      }
+      throw e;
+    }
+    trashItemMapper.deleteById(item.getId());
+    // 重建索引
+    FileEntry entry = findEntry(item.getOriginalPath());
+    if (entry != null) {
+      indexEntry(entry, item.getUsername());
+    }
+  }
+
+  @Override
+  @Audit(action = "file.purge", resource = "#id")
+  public void purgeTrash(Long id) {
+    AuthenticatedUser user = requireUser();
+    TrashItem item = requireTrashItem(id, user);
+    storageService.delete(item.getTrashPath(), true);
+    trashItemMapper.deleteById(id);
+  }
+
+  @Override
+  @Audit(action = "file.trash.empty")
+  public void emptyTrash() {
+    AuthenticatedUser user = requireUser();
+    List<TrashItem> items =
+        isAdmin(user)
+            ? trashItemMapper.selectList(null)
+            : trashItemMapper.selectList(
+                new LambdaQueryWrapper<TrashItem>().eq(TrashItem::getUsername, user.username()));
+    for (TrashItem item : items) {
+      storageService.delete(item.getTrashPath(), true);
+      trashItemMapper.deleteById(item.getId());
+    }
+  }
+
+  private TrashItem requireTrashItem(Long id, AuthenticatedUser user) {
+    TrashItem item = trashItemMapper.selectById(id);
+    if (item == null) {
+      throw new BizException("回收站条目不存在");
+    }
+    if (!isAdmin(user) && !item.getUsername().equals(user.username())) {
+      throw new BizException("无权限操作他人回收站条目");
+    }
+    return item;
+  }
+
+  private boolean isAdmin(AuthenticatedUser user) {
+    return user.username().equals("admin") || authorities().contains("ROLE_ADMIN");
+  }
+
+  private long safeSize(String path) {
+    try {
+      return Files.size(storageService.resolveFile(path));
+    } catch (Exception e) {
+      return 0L;
+    }
   }
 
   @Override
@@ -195,6 +287,37 @@ public class FileServiceImpl implements FileService {
                     idx.getMtime() == null ? 0 : idx.getMtime(),
                     idx.getKind()))
         .toList();
+  }
+
+  @Override
+  public List<FileEntry> media(String path) {
+    AuthenticatedUser user = requireUser();
+    dirPermissionService.check(user.username(), authorities(), path, DirPerm.READ);
+    List<FileEntry> result = new java.util.ArrayList<>();
+    collectMedia(path, 0, result, user.username());
+    return result;
+  }
+
+  private static final int MEDIA_MAX_DEPTH = 8;
+  private static final int MEDIA_MAX_COUNT = 2000;
+
+  private void collectMedia(String dir, int depth, List<FileEntry> out, String username) {
+    if (depth > MEDIA_MAX_DEPTH || out.size() >= MEDIA_MAX_COUNT) {
+      return;
+    }
+    for (FileEntry entry : storageService.list(dir)) {
+      if (out.size() >= MEDIA_MAX_COUNT) {
+        return;
+      }
+      if (!dirPermissionService.has(username, authorities(), entry.path(), DirPerm.READ)) {
+        continue;
+      }
+      if (entry.dir()) {
+        collectMedia(entry.path(), depth + 1, out, username);
+      } else if ("image".equals(entry.kind()) || "video".equals(entry.kind())) {
+        out.add(entry);
+      }
+    }
   }
 
   private FileEntry findEntry(String path) {

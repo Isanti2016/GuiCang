@@ -1,12 +1,14 @@
 package com.guicang.nas.module.auth;
 
 import com.guicang.nas.common.Result;
+import com.guicang.nas.module.auth.dto.ChangePasswordRequest;
 import com.guicang.nas.module.auth.dto.CurrentUserInfo;
 import com.guicang.nas.module.auth.dto.LoginRequest;
 import com.guicang.nas.module.auth.dto.LoginResponse;
 import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -38,6 +40,13 @@ public class AuthController {
   @PostMapping("/logout")
   public Result<Void> logout() {
     authService.logout();
+    return Result.ok();
+  }
+
+  /** 修改本人密码（校验旧密码，同步系统账号）。 */
+  @PutMapping("/password")
+  public Result<Void> changePassword(@Valid @RequestBody ChangePasswordRequest request) {
+    authService.changePassword(request.oldPassword(), request.newPassword());
     return Result.ok();
   }
 }

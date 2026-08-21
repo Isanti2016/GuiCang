@@ -5,6 +5,7 @@ import com.guicang.nas.infra.monitor.HostMetrics;
 import com.guicang.nas.module.audit.AuditLog;
 import com.guicang.nas.module.audit.AuditLogMapper;
 import com.guicang.nas.module.dashboard.DashboardSummary.RecentOperation;
+import com.guicang.nas.module.dashboard.DashboardSummary.UserStorageUsage;
 import com.guicang.nas.module.file.FileIndex;
 import com.guicang.nas.module.file.FileIndexMapper;
 import com.guicang.nas.module.monitor.MetricsService;
@@ -74,7 +75,30 @@ public class DashboardServiceImpl implements DashboardService {
         kindCounts.getOrDefault("note", 0L),
         userTotal,
         userEnabled,
-        recent);
+        recent,
+        userStorageUsage());
+  }
+
+  /** 用户存储占用：按 personal/<user>/ 前缀从 file_index 聚合大小与数量。 */
+  private List<UserStorageUsage> userStorageUsage() {
+    java.util.Map<String, long[]> usage = new java.util.TreeMap<>();
+    fileIndexMapper
+        .selectList(new LambdaQueryWrapper<FileIndex>().likeRight(FileIndex::getPath, "personal/"))
+        .forEach(
+            idx -> {
+              String rel = idx.getPath();
+              int slash = rel.indexOf('/', "personal/".length());
+              if (slash < 0) {
+                return;
+              }
+              String user = rel.substring("personal/".length(), slash);
+              long[] acc = usage.computeIfAbsent(user, k -> new long[2]);
+              acc[0] += idx.getSize() == null ? 0 : idx.getSize();
+              acc[1] += 1;
+            });
+    return usage.entrySet().stream()
+        .map(e -> new UserStorageUsage(e.getKey(), e.getValue()[0], e.getValue()[1]))
+        .toList();
   }
 
   private Map<String, Long> countByKind() {

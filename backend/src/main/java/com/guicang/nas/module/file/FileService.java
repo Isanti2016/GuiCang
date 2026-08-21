@@ -52,4 +52,7 @@ public interface FileService {
 
   /** 按名称/路径关键字搜索（索引查询 + 权限过滤）。 */
   List<FileEntry> search(String keyword);
+
+  /** 递归收集目录下图片/视频（相册数据源；需 READ 权限；限制深度与数量）。 */
+  List<FileEntry> media(String path);
 }

@@ -57,6 +57,12 @@ public class FileController {
     return Result.ok(fileService.list(path));
   }
 
+  /** 递归收集图片/视频（相册）。 */
+  @GetMapping("/media")
+  public Result<List<FileEntry>> media(@RequestParam(defaultValue = "") String path) {
+    return Result.ok(fileService.media(path));
+  }
+
   /** 新建目录。 */
   @PostMapping("/mkdir")
   public Result<Void> mkdir(@Valid @RequestBody FilePathRequest request) {

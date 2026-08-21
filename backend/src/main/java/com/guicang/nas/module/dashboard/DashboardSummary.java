@@ -14,9 +14,13 @@ public record DashboardSummary(
     long fileNotes,
     long userTotal,
     long userEnabled,
-    List<RecentOperation> recentOperations) {
+    List<RecentOperation> recentOperations,
+    List<UserStorageUsage> userStorage) {
 
   /** 最近操作条目。 */
   public record RecentOperation(
       long id, String username, String action, String resource, String result, Long createdAt) {}
+
+  /** 用户存储占用（按 personal/<user>/ 从 file_index 聚合）。 */
+  public record UserStorageUsage(String username, long bytes, long fileCount) {}
 }

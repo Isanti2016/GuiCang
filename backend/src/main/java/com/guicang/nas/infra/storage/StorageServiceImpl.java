@@ -109,7 +109,11 @@ public class StorageServiceImpl implements StorageService {
     }
     Path parent = target.getParent();
     if (parent != null && !Files.isDirectory(parent)) {
-      throw new BizException("目标目录不存在: " + parent);
+      try {
+        Files.createDirectories(parent);
+      } catch (IOException e) {
+        throw new BizException("目标目录不可用: " + parent);
+      }
     }
     try {
       Files.move(source, target, StandardCopyOption.ATOMIC_MOVE);

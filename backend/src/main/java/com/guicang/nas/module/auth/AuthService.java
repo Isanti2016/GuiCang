@@ -15,4 +15,7 @@ public interface AuthService {
 
   /** 登出（客户端丢弃令牌；服务端黑名单待 Redis 接入后实现）。 */
   void logout();
+
+  /** 修改本人密码（校验旧密码，同步 Linux + Samba）。 */
+  void changePassword(String oldPassword, String newPassword);
 }
