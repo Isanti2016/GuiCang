@@ -13,11 +13,12 @@ GuiCang（归藏）家庭 NAS 管理系统。
 前端：Vue 3、TypeScript、Vite、Pinia、Vue Router、Element Plus、ECharts、Axios。
 
 ## 后端分层（硬性）
-- Controller（@RestController）：只做请求响应、参数校验，不写业务。
+- Controller（@RestController）：只做请求响应、参数校验，不写业务，只转发 Service。
 - Service / ServiceImpl（@Service）：业务逻辑与事务；多步数据库操作必须 @Transactional。
 - Mapper（MyBatis-Plus）：数据访问；ServiceImpl 不得绕过 Mapper 直接查库。
 - Controller 不得直接访问 Mapper；层间只传 DTO；实体只用于承载查询结果。
 - 统一返回 Result<T>；全局异常 @RestControllerAdvice；入参校验用 Bean Validation。
+- 目录按业务模块聚合（module/<功能> 内含 Controller/Service/Mapper），跨模块公共能力放 common/ 与 infra/；不把各层平铺全局。
 
 ## 后端命名与风格
 - 类 PascalCase、方法/字段 camelCase、常量 UPPER_SNAKE_CASE。
@@ -33,10 +34,13 @@ GuiCang（归藏）家庭 NAS 管理系统。
 - composables 用 use 前缀，异步返回 { data, error, loading }。
 - TypeScript strict，禁止 any（用 unknown + 收窄）；接口统一封装在 api/。
 - ESLint + Prettier 默认配置。
+- 目录固定职责：api/（接口封装）/ components/（公共组件）/ composables/ / layout/ / router/ / stores/ / styles/ / utils/ / views/；新代码放对应目录，不放无关文件到根。
 
 ## 代码质量（通用）
 - 早返回减少嵌套；事件处理器用 handle 前缀；常量优于魔法值；函数式不可变风格。
 - 业务逻辑不放组件；保持可测试；最小改动。
+- 注释用中文 Javadoc/JSDoc（/** */）：后端公开 API 与前端导出/处理函数必须有注释；禁止注释替代命名、冗余复制注释。
+- 第三方依赖统一：同一类问题只保留一种实现（UI=Element Plus、图标=@element-plus/icons-vue、图表=ECharts、HTTP=axios 统一封装、文档=markdown-it）；不重复引入；声明未使用的依赖立即移除；新依赖先说明理由并经确认。
 
 ## 安全红线（最高优先级）
 - 密钥/账号/密码只放本地配置，不进 git；密码不落业务库（认证走 PAM/系统账号）。

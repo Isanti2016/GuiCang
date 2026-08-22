@@ -18,8 +18,14 @@
 
 ## 3. 后端规范
 
+### 3.0 目录结构（package-by-feature 聚合）
+- 按业务模块聚合：`module/<功能>`（如 module/auth、module/file、module/user）内含该模块的 Controller/Service/ServiceImpl/Mapper/实体，类型以后缀区分（FileController、FileService、FileServiceImpl、FileIndexMapper）。
+- 跨模块公共能力放 `common/`（Result、BizException、全局异常、安全上下文）与 `infra/`（存储、账号/PAM、监控采集、缩略图等基础设施）。
+- 配置类放 `config/`；Flyway 迁移放 `resources/db/migration/`。
+- 新建模块时先建 `module/<功能>` 目录，不把 Controller/Service/Mapper 平铺到全局单一目录。
+
 ### 3.1 分层硬约束
-- Controller 只做请求响应与参数校验，不写业务。
+- Controller 只做请求响应与参数校验，不写业务，只转发 Service。
 - Service / ServiceImpl 做业务与事务；多步数据库操作必须 @Transactional。
 - Mapper（MyBatis-Plus）做数据访问；ServiceImpl 不得绕过 Mapper 直接查库。
 - Controller 不得直接访问 Mapper；层间只传 DTO；实体只用于承载查询结果。
@@ -57,6 +63,10 @@
 
 ## 4. 前端规范
 
+### 4.0 目录结构
+- 固定目录职责：`api/`（接口封装，页面不直接写 axios）、`components/`（跨页面公共组件）、`composables/`（use 前缀复用逻辑）、`layout/`（布局壳）、`router/`（路由与守卫）、`stores/`（Pinia）、`styles/`（全局样式）、`utils/`（无状态工具）、`views/`（页面视图）。
+- 新功能优先复用既有目录；页面私有组件就近放在该页面同级或 components/ 下；不放无关文件到根。
+
 ### 4.1 组合式 API 约束
 - 只用组合式 API + <script setup lang="ts">。
 - 禁止 Options API / mixins / this。
@@ -87,6 +97,17 @@
 ## 5. 通用代码质量
 - 早返回减少嵌套；事件处理器 handle 前缀；常量优于魔法值；函数式不可变风格。
 - 业务逻辑不放组件；保持可测试；最小改动，不做无关重构。
+
+### 5.1 注释规范
+- 后端：公开 API（Controller 方法、Service 接口方法、公共工具方法）必须有 Javadoc（/** */），说明用途与关键参数；实现类内部私有方法视复杂度补充。
+- 前端：api/ 的接口函数与接口类型、utils/、composables/、stores/ 的导出函数、页面视图中的处理函数（handle*、render*、load*、格式化函数等）必须有 /** */ 注释；简单响应式状态 ref/reactive 可不加。
+- 注释用中文；禁止用注释代替清晰命名；禁止复制代码块的冗余注释。
+
+### 5.2 第三方依赖统一
+- 新依赖须先说明理由并经确认（见 §2）；能用既有依赖解决的问题不重复引入。
+- 同一类问题只保留一种实现：UI 用 Element Plus、图标用 @element-plus/icons-vue、图表用 ECharts、HTTP 用 axios（统一封装于 utils/http.ts）、文档渲染用 markdown-it + highlight.js。
+- 引入后必须实际使用；发现声明但未使用的依赖（如冗余 npm 包）应立即移除。
+- 依赖版本集中在 package.json / pom.xml，锁定 major 版本，升级须单独提交并跑全量测试。
 
 ## 6. 安全红线（最高优先级）
 - 密钥/账号/密码只放本地配置（application-local.yml、.env），不进 git；密码不落业务库。

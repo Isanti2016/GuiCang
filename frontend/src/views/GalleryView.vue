@@ -12,11 +12,17 @@ const loading = ref(false);
 const filter = ref<"all" | "image" | "video">("all");
 
 const filtered = computed(() =>
-  filter.value === "all" ? entries.value : entries.value.filter((e) => e.kind === filter.value),
+  filter.value === "all"
+    ? entries.value
+    : entries.value.filter((e) => e.kind === filter.value),
 );
 
-const imageCount = computed(() => entries.value.filter((e) => e.kind === "image").length);
-const videoCount = computed(() => entries.value.filter((e) => e.kind === "video").length);
+const imageCount = computed(
+  () => entries.value.filter((e) => e.kind === "image").length,
+);
+const videoCount = computed(
+  () => entries.value.filter((e) => e.kind === "video").length,
+);
 
 const lightboxOpen = ref(false);
 const lightboxIndex = ref(0);
@@ -26,20 +32,25 @@ const lightboxList = computed(() =>
     : entries.value.filter((e) => e.kind === filter.value),
 );
 
+/** 打开指定索引的灯箱。 */
 function openLightbox(index: number): void {
   lightboxIndex.value = index;
   lightboxOpen.value = true;
 }
 
+/** 灯箱上一张（循环）。 */
 function prev(): void {
   lightboxIndex.value =
-    (lightboxIndex.value - 1 + lightboxList.value.length) % lightboxList.value.length;
+    (lightboxIndex.value - 1 + lightboxList.value.length) %
+    lightboxList.value.length;
 }
 
+/** 灯箱下一张（循环）。 */
 function next(): void {
   lightboxIndex.value = (lightboxIndex.value + 1) % lightboxList.value.length;
 }
 
+/** 灯箱键盘导航（←/→/ESC）。 */
 function onKeydown(e: KeyboardEvent): void {
   if (!lightboxOpen.value) return;
   if (e.key === "ArrowLeft") prev();
@@ -47,9 +58,12 @@ function onKeydown(e: KeyboardEvent): void {
   else if (e.key === "Escape") lightboxOpen.value = false;
 }
 
-const current = computed<FileEntry | null>(() => lightboxList.value[lightboxIndex.value] ?? null);
+const current = computed<FileEntry | null>(
+  () => lightboxList.value[lightboxIndex.value] ?? null,
+);
 const currentName = computed(() => current.value?.name ?? "");
 
+/** 加载全部图片/视频（递归收集）。 */
 async function load(): Promise<void> {
   loading.value = true;
   try {
@@ -82,11 +96,14 @@ onBeforeUnmount(() => {
               {{ imageCount }} 张图片 · {{ videoCount }} 个视频
             </span>
           </div>
-          <el-segmented v-model="filter" :options="[
-            { label: `全部（${entries.length}）`, value: 'all' },
-            { label: `图片（${imageCount}）`, value: 'image' },
-            { label: `视频（${videoCount}）`, value: 'video' },
-          ]" />
+          <el-segmented
+            v-model="filter"
+            :options="[
+              { label: `全部（${entries.length}）`, value: 'all' },
+              { label: `图片（${imageCount}）`, value: 'image' },
+              { label: `视频（${videoCount}）`, value: 'video' },
+            ]"
+          />
         </div>
       </template>
 
@@ -108,7 +125,11 @@ onBeforeUnmount(() => {
               loading="lazy"
             />
             <div v-else class="gallery__video">
-              <img :src="thumbnailUrl(entry.path)" :alt="entry.name" loading="lazy" />
+              <img
+                :src="thumbnailUrl(entry.path)"
+                :alt="entry.name"
+                loading="lazy"
+              />
               <span class="gallery__video-badge">
                 <el-icon><VideoPlay /></el-icon>
               </span>
@@ -133,7 +154,11 @@ onBeforeUnmount(() => {
         <span class="gallery__lightbox-title">{{ currentName }}</span>
       </template>
       <div class="gallery__lightbox-body">
-        <button class="gallery__nav gallery__nav--prev" aria-label="上一张" @click="prev">
+        <button
+          class="gallery__nav gallery__nav--prev"
+          aria-label="上一张"
+          @click="prev"
+        >
           <el-icon><ArrowLeft /></el-icon>
         </button>
         <img
@@ -149,7 +174,11 @@ onBeforeUnmount(() => {
           autoplay
           class="gallery__lightbox-media"
         />
-        <button class="gallery__nav gallery__nav--next" aria-label="下一张" @click="next">
+        <button
+          class="gallery__nav gallery__nav--next"
+          aria-label="下一张"
+          @click="next"
+        >
           <el-icon><ArrowRight /></el-icon>
         </button>
       </div>
@@ -170,7 +199,11 @@ onBeforeUnmount(() => {
 
 .gallery__panel {
   border: 1px solid rgba(126, 210, 255, 0.18);
-  background: linear-gradient(160deg, rgba(8, 26, 54, 0.72), rgba(4, 16, 38, 0.78));
+  background: linear-gradient(
+    160deg,
+    rgba(8, 26, 54, 0.72),
+    rgba(4, 16, 38, 0.78)
+  );
   backdrop-filter: blur(10px);
   border-radius: 14px;
   box-shadow: 0 10px 40px rgba(2, 10, 26, 0.55);

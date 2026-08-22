@@ -35,8 +35,10 @@ const actionLabels: Record<string, string> = {
   "sync.delete": "删除同步任务",
 };
 
+/** 动作码转中文标签。 */
 const actionLabel = (action: string): string => actionLabels[action] ?? action;
 
+/** 按当前筛选条件分页加载审计日志。 */
 async function load(): Promise<void> {
   loading.value = true;
   try {
@@ -52,11 +54,13 @@ async function load(): Promise<void> {
   }
 }
 
+/** 按筛选条件搜索（回到第一页）。 */
 function handleSearch(): void {
   page.value = 1;
   void load();
 }
 
+/** 清空筛选条件并重新加载。 */
 function handleReset(): void {
   filters.username = "";
   filters.action = "";
@@ -64,6 +68,7 @@ function handleReset(): void {
   handleSearch();
 }
 
+/** 切换页码并重新加载。 */
 function handlePageChange(value: number): void {
   page.value = value;
   void load();

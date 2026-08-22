@@ -21,13 +21,19 @@ const menus = computed(() => {
     { path: "/gallery", title: "相册", icon: "Picture" },
     { path: "/trash", title: "回收站", icon: "Delete" },
     { path: "/admin/users", title: "用户管理", icon: "User", adminOnly: true },
-    { path: "/admin/roles", title: "角色与权限", icon: "Lock", adminOnly: true },
+    {
+      path: "/admin/roles",
+      title: "角色与权限",
+      icon: "Lock",
+      adminOnly: true,
+    },
     { path: "/sync", title: "同步任务", icon: "Clock", adminOnly: true },
     { path: "/audit", title: "操作记录", icon: "List", adminOnly: true },
   ];
   return items.filter((item) => !item.adminOnly || isAdmin.value);
 });
 
+/** 退出登录并回到登录页。 */
 async function handleLogout(): Promise<void> {
   await authStore.logout();
   await router.replace("/login");
@@ -63,6 +69,7 @@ const pwdRules: FormRules = {
   ],
 };
 
+/** 打开修改密码对话框（清空表单）。 */
 function openPasswordDialog(): void {
   pwdForm.oldPassword = "";
   pwdForm.newPassword = "";
@@ -70,6 +77,7 @@ function openPasswordDialog(): void {
   pwdDialogOpen.value = true;
 }
 
+/** 提交修改密码：校验后改密并强制重新登录。 */
 async function submitPassword(): Promise<void> {
   const form = pwdFormRef.value;
   if (!form) return;
@@ -88,6 +96,7 @@ async function submitPassword(): Promise<void> {
   }
 }
 
+/** 处理下拉菜单命令（修改密码/使用手册/退出登录）。 */
 async function handleCommand(command: string): Promise<void> {
   if (command === "logout") {
     await handleLogout();
@@ -112,38 +121,46 @@ onMounted(() => {
   <div class="main-layout-wrap">
     <TechBackground />
     <el-container class="main-layout">
-    <el-aside width="200px" class="main-layout__aside">
-      <div class="main-layout__brand">GuiCang 归藏</div>
-      <el-menu router :default-active="route.path" class="main-layout__menu">
-        <el-menu-item v-for="menu in menus" :key="menu.path" :index="menu.path">
-          <el-icon><component :is="menu.icon" /></el-icon>
-          <span>{{ menu.title }}</span>
-        </el-menu-item>
-      </el-menu>
-    </el-aside>
+      <el-aside width="200px" class="main-layout__aside">
+        <div class="main-layout__brand">GuiCang 归藏</div>
+        <el-menu router :default-active="route.path" class="main-layout__menu">
+          <el-menu-item
+            v-for="menu in menus"
+            :key="menu.path"
+            :index="menu.path"
+          >
+            <el-icon><component :is="menu.icon" /></el-icon>
+            <span>{{ menu.title }}</span>
+          </el-menu-item>
+        </el-menu>
+      </el-aside>
 
-    <el-container>
-      <el-header class="main-layout__header">
-        <span class="main-layout__title">{{ title }}</span>
-        <el-dropdown @command="handleCommand">
-          <span class="main-layout__user">
-            {{ username }}
-            <el-icon><ArrowDown /></el-icon>
-          </span>
-          <template #dropdown>
-            <el-dropdown-menu>
-              <el-dropdown-item command="password">修改密码</el-dropdown-item>
-              <el-dropdown-item command="help" divided>使用手册</el-dropdown-item>
-              <el-dropdown-item command="logout" divided>退出登录</el-dropdown-item>
-            </el-dropdown-menu>
-          </template>
-        </el-dropdown>
-      </el-header>
+      <el-container>
+        <el-header class="main-layout__header">
+          <span class="main-layout__title">{{ title }}</span>
+          <el-dropdown @command="handleCommand">
+            <span class="main-layout__user">
+              {{ username }}
+              <el-icon><ArrowDown /></el-icon>
+            </span>
+            <template #dropdown>
+              <el-dropdown-menu>
+                <el-dropdown-item command="password">修改密码</el-dropdown-item>
+                <el-dropdown-item command="help" divided
+                  >使用手册</el-dropdown-item
+                >
+                <el-dropdown-item command="logout" divided
+                  >退出登录</el-dropdown-item
+                >
+              </el-dropdown-menu>
+            </template>
+          </el-dropdown>
+        </el-header>
 
-      <el-main class="main-layout__content">
-        <router-view />
-      </el-main>
-    </el-container>
+        <el-main class="main-layout__content">
+          <router-view />
+        </el-main>
+      </el-container>
     </el-container>
 
     <el-dialog
@@ -162,18 +179,34 @@ onMounted(() => {
         @submit.prevent="submitPassword"
       >
         <el-form-item label="当前密码" prop="oldPassword">
-          <el-input v-model="pwdForm.oldPassword" type="password" show-password />
+          <el-input
+            v-model="pwdForm.oldPassword"
+            type="password"
+            show-password
+          />
         </el-form-item>
         <el-form-item label="新密码" prop="newPassword">
-          <el-input v-model="pwdForm.newPassword" type="password" show-password />
+          <el-input
+            v-model="pwdForm.newPassword"
+            type="password"
+            show-password
+          />
         </el-form-item>
         <el-form-item label="确认新密码" prop="confirmPassword">
-          <el-input v-model="pwdForm.confirmPassword" type="password" show-password />
+          <el-input
+            v-model="pwdForm.confirmPassword"
+            type="password"
+            show-password
+          />
         </el-form-item>
       </el-form>
       <template #footer>
         <el-button @click="pwdDialogOpen = false">取消</el-button>
-        <el-button type="primary" :loading="pwdSubmitting" @click="submitPassword">
+        <el-button
+          type="primary"
+          :loading="pwdSubmitting"
+          @click="submitPassword"
+        >
           确认修改
         </el-button>
       </template>
@@ -194,7 +227,11 @@ onMounted(() => {
 }
 
 .main-layout__aside {
-  background: linear-gradient(180deg, rgba(6, 18, 40, 0.92) 0%, rgba(3, 12, 28, 0.94) 100%);
+  background: linear-gradient(
+    180deg,
+    rgba(6, 18, 40, 0.92) 0%,
+    rgba(3, 12, 28, 0.94) 100%
+  );
   border-right: 1px solid rgba(212, 175, 55, 0.35);
   position: relative;
 }
@@ -245,7 +282,11 @@ onMounted(() => {
   top: 20%;
   bottom: 20%;
   width: 2px;
-  background: linear-gradient(180deg, rgba(212, 175, 55, 0.95), rgba(212, 175, 55, 0.4));
+  background: linear-gradient(
+    180deg,
+    rgba(212, 175, 55, 0.95),
+    rgba(212, 175, 55, 0.4)
+  );
   border-radius: 1px;
 }
 

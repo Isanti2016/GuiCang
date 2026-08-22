@@ -12,8 +12,11 @@ import {
 const items = ref<TrashItem[]>([]);
 const loading = ref(false);
 
-const totalSize = computed(() => items.value.reduce((sum, it) => sum + (it.size ?? 0), 0));
+const totalSize = computed(() =>
+  items.value.reduce((sum, it) => sum + (it.size ?? 0), 0),
+);
 
+/** 格式化字节数为人类可读大小。 */
 const formatSize = (bytes: number): string => {
   if (bytes <= 0) return "0 B";
   const units = ["B", "KB", "MB", "GB", "TB"];
@@ -26,6 +29,7 @@ const formatSize = (bytes: number): string => {
   return `${value.toFixed(1)} ${units[unit]}`;
 };
 
+/** 类型码转中文标签。 */
 const kindLabel = (kind: string): string => {
   const labels: Record<string, string> = {
     dir: "目录",
@@ -37,6 +41,7 @@ const kindLabel = (kind: string): string => {
   return labels[kind] ?? kind;
 };
 
+/** 类型码对应 el-tag 颜色。 */
 const kindTag = (kind: string): "primary" | "success" | "warning" | "info" => {
   switch (kind) {
     case "dir":
@@ -52,11 +57,13 @@ const kindTag = (kind: string): "primary" | "success" | "warning" | "info" => {
   }
 };
 
+/** 从原路径提取文件名。 */
 const originName = (originalPath: string): string =>
   originalPath.includes("/")
     ? originalPath.substring(originalPath.lastIndexOf("/") + 1)
     : originalPath;
 
+/** 加载回收站列表。 */
 async function load(): Promise<void> {
   loading.value = true;
   try {
@@ -68,6 +75,7 @@ async function load(): Promise<void> {
   }
 }
 
+/** 恢复条目到原位置。 */
 async function handleRestore(row: TrashItem): Promise<void> {
   try {
     await restoreTrash(row.id);
@@ -78,12 +86,17 @@ async function handleRestore(row: TrashItem): Promise<void> {
   }
 }
 
+/** 彻底删除单条（二次确认，不可恢复）。 */
 async function handlePurge(row: TrashItem): Promise<void> {
   try {
     await ElMessageBox.confirm(
       `彻底删除「${originName(row.originalPath)}」？删除后无法恢复。`,
       "彻底删除",
-      { type: "warning", confirmButtonText: "彻底删除", cancelButtonText: "取消" },
+      {
+        type: "warning",
+        confirmButtonText: "彻底删除",
+        cancelButtonText: "取消",
+      },
     );
   } catch {
     return;
@@ -97,6 +110,7 @@ async function handlePurge(row: TrashItem): Promise<void> {
   }
 }
 
+/** 清空回收站（二次确认）。 */
 async function handleEmpty(): Promise<void> {
   if (items.value.length === 0) return;
   try {
@@ -127,7 +141,9 @@ onMounted(load);
         <div class="trash__header">
           <div>
             <span class="trash__title">回收站</span>
-            <span class="trash__count">共 {{ items.length }} 项 · {{ formatSize(totalSize) }}</span>
+            <span class="trash__count"
+              >共 {{ items.length }} 项 · {{ formatSize(totalSize) }}</span
+            >
           </div>
           <el-button
             type="danger"
@@ -164,19 +180,33 @@ onMounted(load);
           </template>
         </el-table-column>
         <el-table-column label="大小" width="110">
-          <template #default="{ row }">{{ formatSize(row.size ?? 0) }}</template>
+          <template #default="{ row }">{{
+            formatSize(row.size ?? 0)
+          }}</template>
         </el-table-column>
         <el-table-column label="删除时间" width="180">
           <template #default="{ row }">
-            {{ new Date(row.deletedAt).toLocaleString("zh-CN", { hour12: false }) }}
+            {{
+              new Date(row.deletedAt).toLocaleString("zh-CN", { hour12: false })
+            }}
           </template>
         </el-table-column>
         <el-table-column label="操作" width="180" fixed="right">
           <template #default="{ row }">
-            <el-button size="small" type="primary" link @click="handleRestore(row)">
+            <el-button
+              size="small"
+              type="primary"
+              link
+              @click="handleRestore(row)"
+            >
               恢复
             </el-button>
-            <el-button size="small" type="danger" link @click="handlePurge(row)">
+            <el-button
+              size="small"
+              type="danger"
+              link
+              @click="handlePurge(row)"
+            >
               彻底删除
             </el-button>
           </template>
@@ -194,7 +224,11 @@ onMounted(load);
 
 .trash__panel {
   border: 1px solid rgba(126, 210, 255, 0.18);
-  background: linear-gradient(160deg, rgba(8, 26, 54, 0.72), rgba(4, 16, 38, 0.78));
+  background: linear-gradient(
+    160deg,
+    rgba(8, 26, 54, 0.72),
+    rgba(4, 16, 38, 0.78)
+  );
   backdrop-filter: blur(10px);
   border-radius: 14px;
   box-shadow: 0 10px 40px rgba(2, 10, 26, 0.55);

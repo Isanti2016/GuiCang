@@ -44,7 +44,11 @@
   position: absolute;
   border-radius: 28px;
   border: 1px solid rgba(140, 220, 255, 0.28);
-  background: linear-gradient(135deg, rgba(30, 70, 130, 0.32), rgba(8, 26, 55, 0.22));
+  background: linear-gradient(
+    135deg,
+    rgba(30, 70, 130, 0.32),
+    rgba(8, 26, 55, 0.22)
+  );
   backdrop-filter: blur(14px);
   box-shadow:
     inset 0 1px 0 rgba(190, 235, 255, 0.25),

@@ -1,5 +1,6 @@
 import { get } from "@/utils/http";
 
+/** 操作审计日志条目（与后端 AuditLog 对应）。 */
 export interface AuditLog {
   id: number;
   username: string | null;
@@ -12,11 +13,13 @@ export interface AuditLog {
   createdAt: number | null;
 }
 
+/** 审计日志分页结果。 */
 export interface AuditPage {
   records: AuditLog[];
   total: number;
 }
 
+/** 分页查询审计日志（可按用户/动作/结果过滤）。 */
 export function fetchAuditLogs(
   page: number,
   size: number,

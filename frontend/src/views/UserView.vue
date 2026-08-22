@@ -1,6 +1,11 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from "vue";
-import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from "element-plus";
+import {
+  ElMessage,
+  ElMessageBox,
+  type FormInstance,
+  type FormRules,
+} from "element-plus";
 import {
   createUser,
   deleteUser,
@@ -33,10 +38,16 @@ const stat = computed(() => {
   };
 });
 
+/** 分页加载用户列表。 */
 async function load(): Promise<void> {
   loading.value = true;
   try {
-    const data = await fetchUsers(page.value, size.value, keyword.value || undefined, enabledFilter.value);
+    const data = await fetchUsers(
+      page.value,
+      size.value,
+      keyword.value || undefined,
+      enabledFilter.value,
+    );
     users.value = data.records;
     total.value = data.total;
   } finally {
@@ -44,10 +55,12 @@ async function load(): Promise<void> {
   }
 }
 
+/** 加载角色列表（下拉选项）。 */
 async function loadRoles(): Promise<void> {
   roles.value = await fetchRoles();
 }
 
+/** 按关键字/状态筛选（回到第一页）。 */
 function handleSearch(): void {
   page.value = 1;
   void load();
@@ -82,12 +95,20 @@ const rules: FormRules = {
   roleId: [{ required: true, message: "请选择角色", trigger: "change" }],
 };
 
+/** 打开新建用户对话框。 */
 function openCreate(): void {
   editing.value = null;
-  Object.assign(form, { username: "", displayName: "", email: "", password: "", roleId: undefined });
+  Object.assign(form, {
+    username: "",
+    displayName: "",
+    email: "",
+    password: "",
+    roleId: undefined,
+  });
   dialogOpen.value = true;
 }
 
+/** 打开编辑用户对话框（回填表单）。 */
 function openEdit(user: UserVO): void {
   editing.value = user;
   Object.assign(form, {
@@ -100,6 +121,7 @@ function openEdit(user: UserVO): void {
   dialogOpen.value = true;
 }
 
+/** 提交新建/编辑用户表单。 */
 async function handleSave(): Promise<void> {
   if (!formRef.value) return;
   const valid = await formRef.value.validate().catch(() => false);
@@ -126,6 +148,7 @@ async function handleSave(): Promise<void> {
 }
 
 // ---------- 启停 / 重置密码 / 删除 ----------
+/** 启用/停用用户（确认后调用后端）。 */
 async function handleToggle(user: UserVO): Promise<void> {
   await ElMessageBox.confirm(
     `确认${user.enabled ? "停用" : "启用"}用户「${user.username}」？`,
@@ -137,32 +160,43 @@ async function handleToggle(user: UserVO): Promise<void> {
   await load();
 }
 
+/** 重置用户密码（弹窗输入新密码）。 */
 async function handleResetPassword(user: UserVO): Promise<void> {
-  const { value } = await ElMessageBox.prompt(`为 ${user.username} 设置新密码（至少 8 位）`, "重置密码", {
-    inputType: "password",
-    inputPattern: /^.{8,}$/,
-    inputErrorMessage: "密码至少 8 位",
-    confirmButtonText: "重置",
-  });
+  const { value } = await ElMessageBox.prompt(
+    `为 ${user.username} 设置新密码（至少 8 位）`,
+    "重置密码",
+    {
+      inputType: "password",
+      inputPattern: /^.{8,}$/,
+      inputErrorMessage: "密码至少 8 位",
+      confirmButtonText: "重置",
+    },
+  );
   await resetUserPassword(user.username, value);
   ElMessage.success("密码已重置");
 }
 
+/** 删除用户（默认保留个人目录）。 */
 async function handleDelete(user: UserVO): Promise<void> {
-  await ElMessageBox.confirm(`确认删除用户「${user.username}」？（默认保留个人目录）`, "删除确认", {
-    type: "warning",
-    confirmButtonText: "删除",
-  });
+  await ElMessageBox.confirm(
+    `确认删除用户「${user.username}」？（默认保留个人目录）`,
+    "删除确认",
+    {
+      type: "warning",
+      confirmButtonText: "删除",
+    },
+  );
   await deleteUser(user.username);
   ElMessage.success("已删除");
   await load();
 }
 
-// 用户名首字符徽标
+/** 用户名首字符徽标。 */
 function initialOf(name: string): string {
   return name.charAt(0).toUpperCase();
 }
 
+/** 角色 ID 转角色名。 */
 function roleName(roleId: number): string {
   return roles.value.find((r) => r.id === roleId)?.name ?? "未知";
 }
@@ -187,21 +221,27 @@ onMounted(() => {
       <el-col :span="6">
         <div class="user-view__stat">
           <div class="user-view__stat-label">已启用</div>
-          <div class="user-view__stat-value" style="color: #67e8a0">{{ stat.enabled }}</div>
+          <div class="user-view__stat-value" style="color: #67e8a0">
+            {{ stat.enabled }}
+          </div>
           <div class="user-view__stat-line" style="background: #67e8a0" />
         </div>
       </el-col>
       <el-col :span="6">
         <div class="user-view__stat">
           <div class="user-view__stat-label">已停用</div>
-          <div class="user-view__stat-value" style="color: #f5a3a3">{{ stat.disabled }}</div>
+          <div class="user-view__stat-value" style="color: #f5a3a3">
+            {{ stat.disabled }}
+          </div>
           <div class="user-view__stat-line" style="background: #f5a3a3" />
         </div>
       </el-col>
       <el-col :span="6">
         <div class="user-view__stat">
           <div class="user-view__stat-label">角色数量</div>
-          <div class="user-view__stat-value" style="color: #e8d9a8">{{ stat.roles }}</div>
+          <div class="user-view__stat-value" style="color: #e8d9a8">
+            {{ stat.roles }}
+          </div>
           <div class="user-view__stat-line" style="background: #d4af37" />
         </div>
       </el-col>
@@ -218,22 +258,40 @@ onMounted(() => {
             @keyup.enter="handleSearch"
             @clear="handleSearch"
           >
-            <template #prefix><el-icon><Search /></el-icon></template>
+            <template #prefix
+              ><el-icon><Search /></el-icon
+            ></template>
           </el-input>
-          <el-select v-model="enabledFilter" placeholder="状态" clearable style="width: 120px" @change="handleSearch">
+          <el-select
+            v-model="enabledFilter"
+            placeholder="状态"
+            clearable
+            style="width: 120px"
+            @change="handleSearch"
+          >
             <el-option label="已启用" :value="true" />
             <el-option label="已停用" :value="false" />
           </el-select>
           <el-button @click="handleSearch">查询</el-button>
         </div>
-        <el-button type="primary" @click="openCreate"><el-icon><UserFilled /></el-icon>新建用户</el-button>
+        <el-button type="primary" @click="openCreate"
+          ><el-icon><UserFilled /></el-icon>新建用户</el-button
+        >
       </div>
 
-      <el-table v-loading="loading" :data="users" size="small" class="user-view__table">
+      <el-table
+        v-loading="loading"
+        :data="users"
+        size="small"
+        class="user-view__table"
+      >
         <el-table-column label="用户" min-width="200">
           <template #default="{ row }">
             <div class="user-view__user">
-              <span class="user-view__avatar" :class="row.enabled ? 'is-on' : 'is-off'">
+              <span
+                class="user-view__avatar"
+                :class="row.enabled ? 'is-on' : 'is-off'"
+              >
                 {{ initialOf(row.username) }}
               </span>
               <div class="user-view__user-info">
@@ -245,26 +303,58 @@ onMounted(() => {
         </el-table-column>
         <el-table-column label="角色" width="140">
           <template #default="{ row }">
-            <span class="user-view__role">{{ roleName(row.roleId) }}（{{ row.roleCode }}）</span>
+            <span class="user-view__role"
+              >{{ roleName(row.roleId) }}（{{ row.roleCode }}）</span
+            >
           </template>
         </el-table-column>
-        <el-table-column prop="email" label="邮箱" min-width="160" show-overflow-tooltip />
+        <el-table-column
+          prop="email"
+          label="邮箱"
+          min-width="160"
+          show-overflow-tooltip
+        />
         <el-table-column label="状态" width="90">
           <template #default="{ row }">
-            <span class="user-view__status" :class="row.enabled ? 'is-on' : 'is-off'">
-              <i class="user-view__dot" :class="row.enabled ? 'is-on' : 'is-off'" />
+            <span
+              class="user-view__status"
+              :class="row.enabled ? 'is-on' : 'is-off'"
+            >
+              <i
+                class="user-view__dot"
+                :class="row.enabled ? 'is-on' : 'is-off'"
+              />
               {{ row.enabled ? "启用" : "停用" }}
             </span>
           </template>
         </el-table-column>
         <el-table-column label="操作" width="260">
           <template #default="{ row }">
-            <el-button link type="primary" size="small" @click="openEdit(row)">编辑</el-button>
-            <el-button link type="warning" size="small" @click="handleToggle(row)">
+            <el-button link type="primary" size="small" @click="openEdit(row)"
+              >编辑</el-button
+            >
+            <el-button
+              link
+              type="warning"
+              size="small"
+              @click="handleToggle(row)"
+            >
               {{ row.enabled ? "停用" : "启用" }}
             </el-button>
-            <el-button link type="primary" size="small" @click="handleResetPassword(row)">重置密码</el-button>
-            <el-button link type="danger" size="small" :disabled="row.username === 'admin'" @click="handleDelete(row)">
+            <el-button
+              link
+              type="primary"
+              size="small"
+              @click="handleResetPassword(row)"
+              >重置密码</el-button
+            >
+            <el-button
+              link
+              type="danger"
+              size="small"
+              :disabled="row.username === 'admin'"
+              @click="handleDelete(row)"
+            >
               删除
             </el-button>
           </template>
@@ -281,10 +371,18 @@ onMounted(() => {
       />
     </el-card>
 
-    <el-dialog v-model="dialogOpen" :title="editing ? '编辑用户' : '新建用户'" width="480px">
+    <el-dialog
+      v-model="dialogOpen"
+      :title="editing ? '编辑用户' : '新建用户'"
+      width="480px"
+    >
       <el-form ref="formRef" :model="form" :rules="rules" label-width="80px">
         <el-form-item label="用户名" prop="username">
-          <el-input v-model="form.username" :disabled="Boolean(editing)" placeholder="小写字母/数字，如 zhangsan" />
+          <el-input
+            v-model="form.username"
+            :disabled="Boolean(editing)"
+            placeholder="小写字母/数字，如 zhangsan"
+          />
         </el-form-item>
         <el-form-item label="显示名" prop="displayName">
           <el-input v-model="form.displayName" />
@@ -293,11 +391,25 @@ onMounted(() => {
           <el-input v-model="form.email" />
         </el-form-item>
         <el-form-item v-if="!editing" label="密码" prop="password">
-          <el-input v-model="form.password" type="password" show-password placeholder="至少 8 位，将同步系统账号与 Samba" />
+          <el-input
+            v-model="form.password"
+            type="password"
+            show-password
+            placeholder="至少 8 位，将同步系统账号与 Samba"
+          />
         </el-form-item>
         <el-form-item label="角色" prop="roleId">
-          <el-select v-model="form.roleId" placeholder="选择角色" style="width: 100%">
-            <el-option v-for="role in roles" :key="role.id" :label="`${role.name}（${role.code}）`" :value="role.id" />
+          <el-select
+            v-model="form.roleId"
+            placeholder="选择角色"
+            style="width: 100%"
+          >
+            <el-option
+              v-for="role in roles"
+              :key="role.id"
+              :label="`${role.name}（${role.code}）`"
+              :value="role.id"
+            />
           </el-select>
         </el-form-item>
       </el-form>
@@ -392,7 +504,11 @@ onMounted(() => {
 
 .user-view__avatar.is-on {
   color: #dff5ff;
-  background: linear-gradient(135deg, rgba(110, 200, 255, 0.35), rgba(64, 140, 220, 0.25));
+  background: linear-gradient(
+    135deg,
+    rgba(110, 200, 255, 0.35),
+    rgba(64, 140, 220, 0.25)
+  );
   border: 1px solid rgba(110, 200, 255, 0.5);
 }
 

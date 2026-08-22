@@ -1,6 +1,11 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, reactive, ref } from "vue";
-import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from "element-plus";
+import {
+  ElMessage,
+  ElMessageBox,
+  type FormInstance,
+  type FormRules,
+} from "element-plus";
 import MarkdownIt from "markdown-it";
 import hljs from "highlight.js";
 import "highlight.js/styles/github-dark.css";
@@ -51,7 +56,10 @@ const recentDirs = ref<string[]>([]);
 
 const breadcrumbs = computed(() => {
   const parts = currentDir.value ? currentDir.value.split("/") : [];
-  return parts.map((part, index) => ({ name: part, path: parts.slice(0, index + 1).join("/") }));
+  return parts.map((part, index) => ({
+    name: part,
+    path: parts.slice(0, index + 1).join("/"),
+  }));
 });
 
 const selectedEntries = computed(() =>
@@ -66,12 +74,17 @@ const locations = [
   { name: "个人", path: "personal" },
 ];
 
+/** 记忆最近访问目录（最多 8 个，持久化到 localStorage）。 */
 function rememberDir(path: string): void {
   if (!path) return;
-  recentDirs.value = [path, ...recentDirs.value.filter((d) => d !== path)].slice(0, 8);
+  recentDirs.value = [
+    path,
+    ...recentDirs.value.filter((d) => d !== path),
+  ].slice(0, 8);
   localStorage.setItem(RECENT_KEY, JSON.stringify(recentDirs.value));
 }
 
+/** 切换当前目录并重新加载列表。 */
 async function navigate(path: string): Promise<void> {
   currentDir.value = path;
   selected.value = new Set();
@@ -81,6 +94,7 @@ async function navigate(path: string): Promise<void> {
   await loadList();
 }
 
+/** 加载当前目录文件列表。 */
 async function loadList(): Promise<void> {
   loading.value = true;
   try {
@@ -91,28 +105,33 @@ async function loadList(): Promise<void> {
 }
 
 // ============ 视图切换 ============
+/** 切换网格/列表视图（持久化）。 */
 function switchView(mode: "grid" | "list"): void {
   viewMode.value = mode;
   localStorage.setItem("gc.view-mode", mode);
 }
 
 // ============ 选择 ============
+/** 勾选/取消勾选条目。 */
 function toggleSelect(entry: FileEntry): void {
   if (selected.value.has(entry.path)) selected.value.delete(entry.path);
   else selected.value.add(entry.path);
 }
 
+/** 清空勾选。 */
 function clearSelection(): void {
   selected.value = new Set();
 }
 
 // ============ 条目交互 ============
+/** 单击条目（网格模式下切换勾选）。 */
 function handleEntryClick(entry: FileEntry): void {
   if (viewMode.value === "grid") {
     toggleSelect(entry);
   }
 }
 
+/** 双击条目：目录进入、可预览文件打开预览。 */
 function handleEntryDblClick(entry: FileEntry): void {
   if (entry.dir) {
     void navigate(entry.path);
@@ -121,6 +140,7 @@ function handleEntryDblClick(entry: FileEntry): void {
   }
 }
 
+/** 格式化字节数为人类可读大小。 */
 const formatSize = (size: number): string => {
   if (size < 1024) return `${size} B`;
   if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`;
@@ -128,9 +148,11 @@ const formatSize = (size: number): string => {
   return `${(size / 1024 / 1024 / 1024).toFixed(2)} GB`;
 };
 
+/** 格式化修改时间为本地字符串。 */
 const formatTime = (mtime: number): string =>
   mtime ? new Date(mtime).toLocaleString("zh-CN", { hour12: false }) : "--";
 
+/** 是否支持内联预览（图片/视频/文档）。 */
 const canPreview = (entry: FileEntry): boolean =>
   ["image", "video", "note"].includes(entry.kind);
 
@@ -150,11 +172,14 @@ const mkdirRules: FormRules = {
   name: [{ required: true, message: "请输入目录名", trigger: "blur" }],
 };
 
+/** 新建目录（校验后调用后端）。 */
 async function handleMkdir(): Promise<void> {
   if (!mkdirFormRef.value) return;
   const valid = await mkdirFormRef.value.validate().catch(() => false);
   if (!valid) return;
-  const path = currentDir.value ? `${currentDir.value}/${mkdirForm.name}` : mkdirForm.name;
+  const path = currentDir.value
+    ? `${currentDir.value}/${mkdirForm.name}`
+    : mkdirForm.name;
   await mkdir(path);
   ElMessage.success("目录已创建");
   mkdirDialog.value = false;
@@ -168,6 +193,7 @@ const uploadFiles = ref<File[]>([]);
 const uploadProgress = ref(0);
 const uploading = ref(false);
 
+/** 逐文件上传（带总体进度）。 */
 async function handleUpload(): Promise<void> {
   if (uploadFiles.value.length === 0) return;
   uploading.value = true;
@@ -177,7 +203,9 @@ async function handleUpload(): Promise<void> {
   try {
     for (const file of uploadFiles.value) {
       await uploadWithProgress(currentDir.value, file, (percent) => {
-        uploadProgress.value = Math.round(((done + percent / 100) / total) * 100);
+        uploadProgress.value = Math.round(
+          ((done + percent / 100) / total) * 100,
+        );
       });
       done += 1;
     }
@@ -196,12 +224,14 @@ const renameForm = reactive({ name: "" });
 const renameTarget = ref<FileEntry | null>(null);
 const renameFormRef = ref<FormInstance>();
 
+/** 打开重命名对话框。 */
 function openRename(entry: FileEntry): void {
   renameTarget.value = entry;
   renameForm.name = entry.name;
   renameDialog.value = true;
 }
 
+/** 提交重命名。 */
 async function handleRename(): Promise<void> {
   if (!renameFormRef.value || !renameTarget.value) return;
   const valid = await renameFormRef.value.validate().catch(() => false);
@@ -212,6 +242,7 @@ async function handleRename(): Promise<void> {
   await loadList();
 }
 
+/** 删除一个或多个条目（确认后软删除进回收站）。 */
 async function handleDelete(entries: FileEntry[]): Promise<void> {
   const names = entries.map((e) => e.name).join("、");
   const hasDir = entries.some((e) => e.dir);
@@ -228,6 +259,7 @@ async function handleDelete(entries: FileEntry[]): Promise<void> {
   await loadList();
 }
 
+/** 批量删除勾选条目。 */
 async function handleBatchDelete(): Promise<void> {
   if (selectedEntries.value.length === 0) return;
   await handleDelete(selectedEntries.value);
@@ -237,29 +269,36 @@ const moveDialog = ref(false);
 const moveTarget = ref<FileEntry | null>(null);
 
 interface TreeNode {
-  name: string
-  path: string
-  children?: TreeNode[]
-  leaf?: boolean
+  name: string;
+  path: string;
+  children?: TreeNode[];
+  leaf?: boolean;
 }
 
 const treeProps = { label: "name", children: "children", isLeaf: "leaf" };
 
+/** 懒加载移动目标目录树（el-tree 节点展开时触发）。 */
 async function loadMoveTree(
   node: { level?: number; path?: string },
   resolve: (data: TreeNode[]) => void,
 ): Promise<void> {
-  const base = node.level === 0 ? "" : node.path ?? "";
+  const base = node.level === 0 ? "" : (node.path ?? "");
   const children = await listFiles(base);
-  resolve(children.filter((c) => c.dir).map((c) => ({ name: c.name, path: c.path, leaf: false })));
+  resolve(
+    children
+      .filter((c) => c.dir)
+      .map((c) => ({ name: c.name, path: c.path, leaf: false })),
+  );
 }
 
+/** 打开移动对话框。 */
 async function openMove(entry: FileEntry): Promise<void> {
   moveTarget.value = entry;
   moveTargetNode.value = "";
   moveDialog.value = true;
 }
 
+/** 提交移动。 */
 async function handleMove(): Promise<void> {
   if (!moveTarget.value || !moveTargetNode.value) return;
   await moveFile(moveTarget.value.path, moveTargetNode.value);
@@ -270,11 +309,13 @@ async function handleMove(): Promise<void> {
 
 const moveTargetNode = ref<string>("");
 
+/** 选中目录树节点为目标目录。 */
 function handleMoveNodeClick(node: TreeNode): void {
   moveTargetNode.value = node.path;
 }
 
 // ============ 下载 ============
+/** 下载文件为本地文件。 */
 async function handleDownload(entry: FileEntry): Promise<void> {
   if (entry.dir) {
     ElMessage.info("目录请使用打包功能（暂未提供）");
@@ -295,6 +336,7 @@ const previewMode = ref<"view" | "edit">("view");
 const previewText = ref("");
 const editingText = ref("");
 
+/** 打开预览抽屉（文档读取内容）。 */
 async function openPreview(entry: FileEntry): Promise<void> {
   previewEntry.value = entry;
   previewOpen.value = true;
@@ -307,11 +349,13 @@ async function openPreview(entry: FileEntry): Promise<void> {
 
 const renderedMarkdown = computed(() => md.render(previewText.value));
 
+/** 进入编辑模式。 */
 function enterEdit(): void {
   editingText.value = previewText.value;
   previewMode.value = "edit";
 }
 
+/** 保存编辑内容并回到预览模式。 */
 async function handleSave(): Promise<void> {
   if (!previewEntry.value) return;
   await writeText(previewEntry.value.path, editingText.value);
@@ -321,6 +365,7 @@ async function handleSave(): Promise<void> {
 }
 
 // ============ 搜索 ============
+/** 按关键字搜索文件。 */
 async function handleSearch(): Promise<void> {
   if (!searchKeyword.value.trim()) {
     searchResults.value = [];
@@ -329,6 +374,7 @@ async function handleSearch(): Promise<void> {
   searchResults.value = await searchFiles(searchKeyword.value.trim());
 }
 
+/** 跳转到搜索结果所在目录并定位。 */
 function useSearchResult(entry: FileEntry): void {
   searchResults.value = [];
   searchKeyword.value = "";
@@ -392,13 +438,28 @@ onMounted(() => {
 
       <template v-else>
         <div class="file-manager__nav-title">位置</div>
-        <div class="file-manager__nav-item" v-for="loc in locations" :key="loc.path" @click="navigate(loc.path)">
+        <div
+          class="file-manager__nav-item"
+          v-for="loc in locations"
+          :key="loc.path"
+          @click="navigate(loc.path)"
+        >
           <el-icon color="#6ec8ff"><FolderOpened /></el-icon>
           <span>{{ loc.name }}</span>
         </div>
 
-        <div v-if="recentDirs.length" class="file-manager__nav-title file-manager__nav-title--recent">最近访问</div>
-        <div v-for="dir in recentDirs" :key="dir" class="file-manager__nav-item" @click="navigate(dir)">
+        <div
+          v-if="recentDirs.length"
+          class="file-manager__nav-title file-manager__nav-title--recent"
+        >
+          最近访问
+        </div>
+        <div
+          v-for="dir in recentDirs"
+          :key="dir"
+          class="file-manager__nav-item"
+          @click="navigate(dir)"
+        >
           <el-icon color="#d4af37"><Clock /></el-icon>
           <span class="file-manager__nav-path">{{ dir }}</span>
         </div>
@@ -411,18 +472,33 @@ onMounted(() => {
       <div class="file-manager__toolbar">
         <el-breadcrumb separator="/" class="file-manager__breadcrumb">
           <el-breadcrumb-item @click="navigate('')">根目录</el-breadcrumb-item>
-          <el-breadcrumb-item v-for="crumb in breadcrumbs" :key="crumb.path" @click="navigate(crumb.path)">
+          <el-breadcrumb-item
+            v-for="crumb in breadcrumbs"
+            :key="crumb.path"
+            @click="navigate(crumb.path)"
+          >
             {{ crumb.name }}
           </el-breadcrumb-item>
         </el-breadcrumb>
 
         <div class="file-manager__actions">
           <el-radio-group v-model="viewMode" size="small" @change="switchView">
-            <el-radio-button value="grid"><el-icon><Grid /></el-icon></el-radio-button>
-            <el-radio-button value="list"><el-icon><List /></el-icon></el-radio-button>
+            <el-radio-button value="grid"
+              ><el-icon><Grid /></el-icon
+            ></el-radio-button>
+            <el-radio-button value="list"
+              ><el-icon><List /></el-icon
+            ></el-radio-button>
           </el-radio-group>
-          <el-button size="small" @click="loadList"><el-icon><Refresh /></el-icon>刷新</el-button>
-          <el-button size="small" type="primary" plain @click="mkdirDialog = true">
+          <el-button size="small" @click="loadList"
+            ><el-icon><Refresh /></el-icon>刷新</el-button
+          >
+          <el-button
+            size="small"
+            type="primary"
+            plain
+            @click="mkdirDialog = true"
+          >
             <el-icon><FolderAdd /></el-icon>新建目录
           </el-button>
           <el-button size="small" type="primary" @click="uploadDialog = true">
@@ -435,7 +511,9 @@ onMounted(() => {
       <transition name="gc-fade">
         <div v-if="selected.size > 0" class="file-manager__selectbar">
           <span>已选 {{ selected.size }} 项</span>
-          <el-button size="small" type="danger" plain @click="handleBatchDelete">批量删除</el-button>
+          <el-button size="small" type="danger" plain @click="handleBatchDelete"
+            >批量删除</el-button
+          >
           <el-button size="small" @click="clearSelection">取消选择</el-button>
         </div>
       </transition>
@@ -453,30 +531,68 @@ onMounted(() => {
             @dblclick="handleEntryDblClick(entry)"
           >
             <div class="file-manager__card-media">
-              <img v-if="['image', 'video'].includes(entry.kind)" :src="thumbnailUrl(entry.path)" loading="lazy" />
-              <el-icon v-else :size="34" :color="entry.dir ? '#6ec8ff' : '#8fb6dd'">
+              <img
+                v-if="['image', 'video'].includes(entry.kind)"
+                :src="thumbnailUrl(entry.path)"
+                loading="lazy"
+              />
+              <el-icon
+                v-else
+                :size="34"
+                :color="entry.dir ? '#6ec8ff' : '#8fb6dd'"
+              >
                 <Folder v-if="entry.dir" />
                 <Document v-else-if="entry.kind === 'other'" />
                 <Notebook v-else-if="entry.kind === 'note'" />
               </el-icon>
-              <span class="file-manager__card-kind">{{ kindLabel[entry.kind] }}</span>
+              <span class="file-manager__card-kind">{{
+                kindLabel[entry.kind]
+              }}</span>
             </div>
             <div class="file-manager__card-info">
-              <div class="file-manager__card-name" :title="entry.name">{{ entry.name }}</div>
+              <div class="file-manager__card-name" :title="entry.name">
+                {{ entry.name }}
+              </div>
               <div class="file-manager__card-meta">
-                {{ entry.dir ? "--" : formatSize(entry.size) }} · {{ formatTime(entry.mtime).slice(5, 16) }}
+                {{ entry.dir ? "--" : formatSize(entry.size) }} ·
+                {{ formatTime(entry.mtime).slice(5, 16) }}
               </div>
             </div>
             <div class="file-manager__card-actions">
-              <el-button link size="small" @click.stop="openPreview(entry)" :disabled="!canPreview(entry)">预览</el-button>
-              <el-button link size="small" @click.stop="handleDownload(entry)" :disabled="entry.dir">下载</el-button>
-              <el-button link size="small" @click.stop="openMove(entry)">移动</el-button>
-              <el-button link size="small" @click.stop="openRename(entry)">重命名</el-button>
-              <el-button link type="danger" size="small" @click.stop="handleDelete([entry])">删除</el-button>
+              <el-button
+                link
+                size="small"
+                @click.stop="openPreview(entry)"
+                :disabled="!canPreview(entry)"
+                >预览</el-button
+              >
+              <el-button
+                link
+                size="small"
+                @click.stop="handleDownload(entry)"
+                :disabled="entry.dir"
+                >下载</el-button
+              >
+              <el-button link size="small" @click.stop="openMove(entry)"
+                >移动</el-button
+              >
+              <el-button link size="small" @click.stop="openRename(entry)"
+                >重命名</el-button
+              >
+              <el-button
+                link
+                type="danger"
+                size="small"
+                @click.stop="handleDelete([entry])"
+                >删除</el-button
+              >
             </div>
           </div>
 
-          <el-empty v-if="!loading && list.length === 0" description="目录为空" />
+          <el-empty
+            v-if="!loading && list.length === 0"
+            description="目录为空"
+          />
         </div>
 
         <!-- 列表视图 -->
@@ -487,37 +603,84 @@ onMounted(() => {
           size="small"
           class="file-manager__table"
           @row-dblclick="handleEntryDblClick"
-          @selection-change="(rows: FileEntry[]) => (selected = new Set(rows.map((r) => r.path)))"
+          @selection-change="
+            (rows: FileEntry[]) => (selected = new Set(rows.map((r) => r.path)))
+          "
         >
           <el-table-column type="selection" width="40" />
           <el-table-column label="" width="46">
             <template #default="{ row }">
               <el-icon v-if="row.dir" color="#6ec8ff"><Folder /></el-icon>
-              <img v-else-if="['image', 'video'].includes(row.kind)" :src="thumbnailUrl(row.path)" class="file-manager__thumb" loading="lazy" />
+              <img
+                v-else-if="['image', 'video'].includes(row.kind)"
+                :src="thumbnailUrl(row.path)"
+                class="file-manager__thumb"
+                loading="lazy"
+              />
               <el-icon v-else color="#8fb6dd"><Document /></el-icon>
             </template>
           </el-table-column>
-          <el-table-column prop="name" label="名称" min-width="220" show-overflow-tooltip>
+          <el-table-column
+            prop="name"
+            label="名称"
+            min-width="220"
+            show-overflow-tooltip
+          >
             <template #default="{ row }">
               <span
                 class="file-manager__name"
-                @click="row.dir ? navigate(row.path) : canPreview(row) && openPreview(row)"
-              >{{ row.name }}</span>
+                @click="
+                  row.dir
+                    ? navigate(row.path)
+                    : canPreview(row) && openPreview(row)
+                "
+                >{{ row.name }}</span
+              >
             </template>
           </el-table-column>
           <el-table-column prop="size" label="大小" width="110">
-            <template #default="{ row }">{{ row.dir ? "--" : formatSize(row.size) }}</template>
+            <template #default="{ row }">{{
+              row.dir ? "--" : formatSize(row.size)
+            }}</template>
           </el-table-column>
           <el-table-column prop="mtime" label="修改时间" width="170">
             <template #default="{ row }">{{ formatTime(row.mtime) }}</template>
           </el-table-column>
           <el-table-column label="操作" width="250">
             <template #default="{ row }">
-              <el-button link type="primary" size="small" @click="openPreview(row)" :disabled="!canPreview(row)">预览</el-button>
-              <el-button link type="primary" size="small" @click="handleDownload(row)" :disabled="row.dir">下载</el-button>
-              <el-button link type="primary" size="small" @click="openMove(row)">移动</el-button>
-              <el-button link type="primary" size="small" @click="openRename(row)">重命名</el-button>
-              <el-button link type="danger" size="small" @click="handleDelete([row])">删除</el-button>
+              <el-button
+                link
+                type="primary"
+                size="small"
+                @click="openPreview(row)"
+                :disabled="!canPreview(row)"
+                >预览</el-button
+              >
+              <el-button
+                link
+                type="primary"
+                size="small"
+                @click="handleDownload(row)"
+                :disabled="row.dir"
+                >下载</el-button
+              >
+              <el-button link type="primary" size="small" @click="openMove(row)"
+                >移动</el-button
+              >
+              <el-button
+                link
+                type="primary"
+                size="small"
+                @click="openRename(row)"
+                >重命名</el-button
+              >
+              <el-button
+                link
+                type="danger"
+                size="small"
+                @click="handleDelete([row])"
+                >删除</el-button
+              >
             </template>
           </el-table-column>
         </el-table>
@@ -525,22 +688,57 @@ onMounted(() => {
     </main>
 
     <!-- 预览抽屉 -->
-    <el-drawer v-model="previewOpen" :title="previewEntry?.name" size="60%" class="file-manager__drawer">
+    <el-drawer
+      v-model="previewOpen"
+      :title="previewEntry?.name"
+      size="60%"
+      class="file-manager__drawer"
+    >
       <template v-if="previewEntry">
-        <div v-if="previewEntry.kind === 'image'" class="file-manager__preview-image">
-          <img :src="streamUrl(previewEntry.path)" style="max-width: 100%; border-radius: 8px" />
+        <div
+          v-if="previewEntry.kind === 'image'"
+          class="file-manager__preview-image"
+        >
+          <img
+            :src="streamUrl(previewEntry.path)"
+            style="max-width: 100%; border-radius: 8px"
+          />
         </div>
-        <video v-else-if="previewEntry.kind === 'video'" :src="streamUrl(previewEntry.path)" controls style="width: 100%; border-radius: 8px" />
+        <video
+          v-else-if="previewEntry.kind === 'video'"
+          :src="streamUrl(previewEntry.path)"
+          controls
+          style="width: 100%; border-radius: 8px"
+        />
         <div v-else-if="previewEntry.kind === 'note'">
           <div class="file-manager__preview-toolbar">
-            <el-button v-if="previewMode === 'view'" size="small" type="primary" @click="enterEdit">编辑</el-button>
+            <el-button
+              v-if="previewMode === 'view'"
+              size="small"
+              type="primary"
+              @click="enterEdit"
+              >编辑</el-button
+            >
             <template v-else>
-              <el-button size="small" type="success" @click="handleSave">保存</el-button>
-              <el-button size="small" @click="previewMode = 'view'">取消</el-button>
+              <el-button size="small" type="success" @click="handleSave"
+                >保存</el-button
+              >
+              <el-button size="small" @click="previewMode = 'view'"
+                >取消</el-button
+              >
             </template>
           </div>
-          <el-input v-if="previewMode === 'edit'" v-model="editingText" type="textarea" :rows="20" />
-          <div v-else class="file-manager__markdown" v-html="renderedMarkdown" />
+          <el-input
+            v-if="previewMode === 'edit'"
+            v-model="editingText"
+            type="textarea"
+            :rows="20"
+          />
+          <div
+            v-else
+            class="file-manager__markdown"
+            v-html="renderedMarkdown"
+          />
         </div>
         <el-empty v-else description="该类型暂不支持预览，可下载查看" />
       </template>
@@ -550,7 +748,11 @@ onMounted(() => {
     <el-dialog v-model="mkdirDialog" title="新建目录" width="400px">
       <el-form ref="mkdirFormRef" :model="mkdirForm" :rules="mkdirRules">
         <el-form-item label="目录名" prop="name">
-          <el-input v-model="mkdirForm.name" placeholder="新目录名" @keyup.enter="handleMkdir" />
+          <el-input
+            v-model="mkdirForm.name"
+            placeholder="新目录名"
+            @keyup.enter="handleMkdir"
+          />
         </el-form-item>
       </el-form>
       <template #footer>
@@ -571,7 +773,9 @@ onMounted(() => {
         <el-icon class="el-icon--upload"><UploadFilled /></el-icon>
         <div class="el-upload__text">拖拽文件到此处，或<em>点击选择</em></div>
         <template #tip>
-          <div class="el-upload__tip">单文件 ≤1G · 支持多选 · 危险扩展名会被拦截</div>
+          <div class="el-upload__tip">
+            单文件 ≤1G · 支持多选 · 危险扩展名会被拦截
+          </div>
         </template>
       </el-upload>
       <el-progress
@@ -582,7 +786,9 @@ onMounted(() => {
       />
       <template #footer>
         <el-button @click="uploadDialog = false">取消</el-button>
-        <el-button type="primary" :loading="uploading" @click="handleUpload">上传</el-button>
+        <el-button type="primary" :loading="uploading" @click="handleUpload"
+          >上传</el-button
+        >
       </template>
     </el-dialog>
 
@@ -805,7 +1011,9 @@ onMounted(() => {
 
 .file-manager__card.is-selected {
   border-color: rgba(212, 175, 55, 0.8);
-  box-shadow: 0 0 0 1px rgba(212, 175, 55, 0.4), 0 8px 24px rgba(2, 10, 26, 0.5);
+  box-shadow:
+    0 0 0 1px rgba(212, 175, 55, 0.4),
+    0 8px 24px rgba(2, 10, 26, 0.5);
 }
 
 .file-manager__card-media {

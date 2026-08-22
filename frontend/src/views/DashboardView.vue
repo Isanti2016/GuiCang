@@ -18,9 +18,12 @@ const fileTypeRef = ref<HTMLElement | null>(null);
 const userStorageRef = ref<HTMLElement | null>(null);
 const { setOption: setTrendOption } = useECharts(trendRef);
 const { setOption: setDiskOption } = useECharts(diskRef);
-const { setOption: setFileTypeOption, clear: clearFileType } = useECharts(fileTypeRef);
-const { setOption: setUserStorageOption, clear: clearUserStorage } = useECharts(userStorageRef);
+const { setOption: setFileTypeOption, clear: clearFileType } =
+  useECharts(fileTypeRef);
+const { setOption: setUserStorageOption, clear: clearUserStorage } =
+  useECharts(userStorageRef);
 
+/** 格式化 KB 为人类可读大小。 */
 const formatBytes = (kb: number): string => {
   if (kb <= 0) return "0 B";
   const units = ["KB", "MB", "GB", "TB"];
@@ -33,6 +36,7 @@ const formatBytes = (kb: number): string => {
   return `${value.toFixed(1)} ${units[unit]}`;
 };
 
+/** 保留一位小数的百分比。 */
 const formatPercent = (value: number): string => `${value.toFixed(1)}%`;
 
 const diskTotal = computed(() => formatBytes(summary.value?.diskTotalKb ?? 0));
@@ -50,6 +54,7 @@ const loadAvg = computed(() =>
     : "--",
 );
 
+/** 渲染 CPU 使用率趋势折线图。 */
 function renderTrend(points: SeriesPoint[]): void {
   setTrendOption({
     tooltip: { trigger: "axis" },
@@ -73,6 +78,7 @@ function renderTrend(points: SeriesPoint[]): void {
   });
 }
 
+/** 渲染磁盘占用环形图。 */
 function renderDisk(): void {
   const s = summary.value;
   if (!s) return;
@@ -93,6 +99,7 @@ function renderDisk(): void {
   });
 }
 
+/** 渲染文件类型分布饼图。 */
 function renderFileType(): void {
   const s = summary.value;
   if (!s) return;
@@ -100,7 +107,13 @@ function renderFileType(): void {
     { name: "图片", value: s.fileImages },
     { name: "视频", value: s.fileVideos },
     { name: "文档", value: s.fileNotes },
-    { name: "其他", value: Math.max(0, s.fileTotal - s.fileImages - s.fileVideos - s.fileNotes) },
+    {
+      name: "其他",
+      value: Math.max(
+        0,
+        s.fileTotal - s.fileImages - s.fileVideos - s.fileNotes,
+      ),
+    },
   ].filter((d) => d.value > 0);
   if (data.length === 0) {
     clearFileType();
@@ -123,6 +136,7 @@ function renderFileType(): void {
   });
 }
 
+/** 渲染用户存储占用条图（取占用前 10）。 */
 function renderUserStorage(): void {
   const list = summary.value?.userStorage ?? [];
   if (list.length === 0) {
@@ -163,7 +177,10 @@ function renderUserStorage(): void {
           borderRadius: [4, 4, 0, 0],
           color: {
             type: "linear",
-            x: 0, y: 0, x2: 0, y2: 1,
+            x: 0,
+            y: 0,
+            x2: 0,
+            y2: 1,
             colorStops: [
               { offset: 0, color: "#6ec8ff" },
               { offset: 1, color: "#2b6fd4" },
@@ -175,6 +192,7 @@ function renderUserStorage(): void {
   });
 }
 
+/** 拉取大屏聚合数据并渲染全部图表（30s 轮询）。 */
 async function loadData(): Promise<void> {
   try {
     summary.value = await fetchDashboardSummary();
@@ -205,6 +223,7 @@ onBeforeUnmount(() => {
 });
 
 const recentOperations = computed(() => summary.value?.recentOperations ?? []);
+/** 动作码转中文标签。 */
 const actionLabel = (action: string): string => {
   const labels: Record<string, string> = {
     login: "登录",

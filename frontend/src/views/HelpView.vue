@@ -4,9 +4,9 @@ import { ref } from "vue";
 const active = ref("intro");
 
 interface Section {
-  name: string
-  title: string
-  items: { title: string; body: string }[]
+  name: string;
+  title: string;
+  items: { title: string; body: string }[];
 }
 
 const sections: Section[] = [
@@ -136,15 +136,25 @@ const sections: Section[] = [
     <el-card shadow="never" class="help-view__card">
       <div class="help-view__header">
         <h2 class="help-view__title">使用手册</h2>
-        <p class="help-view__desc">GuiCang 归藏 · 家庭 NAS 管理系统功能说明与常见问题</p>
+        <p class="help-view__desc">
+          GuiCang 归藏 · 家庭 NAS 管理系统功能说明与常见问题
+        </p>
       </div>
 
       <el-collapse v-model="active" accordion>
-        <el-collapse-item v-for="section in sections" :key="section.name" :name="section.name">
+        <el-collapse-item
+          v-for="section in sections"
+          :key="section.name"
+          :name="section.name"
+        >
           <template #title>
             <span class="help-view__section-title">{{ section.title }}</span>
           </template>
-          <div v-for="item in section.items" :key="item.title" class="help-view__item">
+          <div
+            v-for="item in section.items"
+            :key="item.title"
+            class="help-view__item"
+          >
             <h4 class="help-view__item-title">{{ item.title }}</h4>
             <p class="help-view__item-body">{{ item.body }}</p>
           </div>

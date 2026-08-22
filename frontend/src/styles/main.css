@@ -89,7 +89,10 @@ html.dark .el-textarea__inner {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: linear-gradient(rgba(212, 175, 55, 0.5), rgba(110, 200, 255, 0.4));
+  background: linear-gradient(
+    rgba(212, 175, 55, 0.5),
+    rgba(110, 200, 255, 0.4)
+  );
   border-radius: 4px;
 }
 

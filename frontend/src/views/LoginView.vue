@@ -22,6 +22,7 @@ const rules: FormRules = {
   password: [{ required: true, message: "请输入密码", trigger: "blur" }],
 };
 
+/** 提交登录：校验表单后登录并跳转（支持 redirect 回跳）。 */
 async function handleLogin(): Promise<void> {
   if (!formRef.value) return;
   const valid = await formRef.value.validate().catch(() => false);
@@ -61,7 +62,11 @@ async function handleLogin(): Promise<void> {
         @keyup.enter="handleLogin"
       >
         <el-form-item label="用户名" prop="username">
-          <el-input v-model="form.username" placeholder="系统用户名" autocomplete="username" />
+          <el-input
+            v-model="form.username"
+            placeholder="系统用户名"
+            autocomplete="username"
+          />
         </el-form-item>
         <el-form-item label="密码" prop="password">
           <el-input
@@ -72,7 +77,12 @@ async function handleLogin(): Promise<void> {
             autocomplete="current-password"
           />
         </el-form-item>
-        <el-button class="login-card__submit" type="primary" :loading="loading" @click="handleLogin">
+        <el-button
+          class="login-card__submit"
+          type="primary"
+          :loading="loading"
+          @click="handleLogin"
+        >
           登 录
         </el-button>
       </el-form>
@@ -101,7 +111,12 @@ async function handleLogin(): Promise<void> {
   left: 0;
   right: 0;
   height: 3px;
-  background: linear-gradient(90deg, transparent, rgba(212, 175, 55, 0.85), transparent);
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(212, 175, 55, 0.85),
+    transparent
+  );
   animation: gc-scan 4s ease-in-out infinite;
   opacity: 0.8;
 }
@@ -170,7 +185,12 @@ async function handleLogin(): Promise<void> {
   transform: translateX(-50%);
   width: 120px;
   height: 1px;
-  background: linear-gradient(90deg, transparent, rgba(212, 175, 55, 0.9), transparent);
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(212, 175, 55, 0.9),
+    transparent
+  );
 }
 
 .login-card__subtitle {

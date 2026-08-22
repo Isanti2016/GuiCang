@@ -1,6 +1,11 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from "vue";
-import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from "element-plus";
+import {
+  ElMessage,
+  ElMessageBox,
+  type FormInstance,
+  type FormRules,
+} from "element-plus";
 import cronstrue from "cronstrue";
 import {
   createTask,
@@ -48,6 +53,7 @@ const stat = computed(() => ({
   failed: tasks.value.filter((t) => t.lastStatus === "failed").length,
 }));
 
+/** 加载任务列表。 */
 async function load(): Promise<void> {
   loading.value = true;
   try {
@@ -57,6 +63,7 @@ async function load(): Promise<void> {
   }
 }
 
+/** cron 表达式转中文描述（解析失败回退原文）。 */
 function cronText(cron: string): string {
   try {
     return cronstrue.toString(cron, { locale: "zh_CN" });
@@ -65,18 +72,29 @@ function cronText(cron: string): string {
   }
 }
 
+/** 打开新建任务对话框。 */
 function openCreate(): void {
   editing.value = null;
-  Object.assign(form, { name: "", sourceConfig: "", cron: cronPresets[0].value });
+  Object.assign(form, {
+    name: "",
+    sourceConfig: "",
+    cron: cronPresets[0].value,
+  });
   dialogOpen.value = true;
 }
 
+/** 打开编辑任务对话框。 */
 function openEdit(task: SyncTask): void {
   editing.value = task;
-  Object.assign(form, { name: task.name, sourceConfig: task.sourceConfig, cron: task.cron });
+  Object.assign(form, {
+    name: task.name,
+    sourceConfig: task.sourceConfig,
+    cron: task.cron,
+  });
   dialogOpen.value = true;
 }
 
+/** 提交新建/编辑任务。 */
 async function handleSave(): Promise<void> {
   if (!formRef.value) return;
   const valid = await formRef.value.validate().catch(() => false);
@@ -92,6 +110,7 @@ async function handleSave(): Promise<void> {
   await load();
 }
 
+/** 启用/停用任务。 */
 async function handleToggle(task: SyncTask): Promise<void> {
   await updateTask(task.id, task.enabled === 0, {
     name: task.name,
@@ -102,19 +121,27 @@ async function handleToggle(task: SyncTask): Promise<void> {
   await load();
 }
 
+/** 删除任务（确认后调用后端）。 */
 async function handleDelete(task: SyncTask): Promise<void> {
-  await ElMessageBox.confirm(`确认删除任务「${task.name}」？`, "删除确认", { type: "warning", confirmButtonText: "删除" });
+  await ElMessageBox.confirm(`确认删除任务「${task.name}」？`, "删除确认", {
+    type: "warning",
+    confirmButtonText: "删除",
+  });
   await deleteTask(task.id);
   ElMessage.success("已删除");
   await load();
 }
 
+/** 立即执行任务并提示结果。 */
 async function handleRun(task: SyncTask): Promise<void> {
   const result = await runTask(task.id);
-  ElMessage.success(`执行完成：新增 ${result.added} / 更新 ${result.updated} / 删除 ${result.deleted}`);
+  ElMessage.success(
+    `执行完成：新增 ${result.added} / 更新 ${result.updated} / 删除 ${result.deleted}`,
+  );
   await load();
 }
 
+/** 打开任务执行历史抽屉。 */
 async function openHistory(task: SyncTask): Promise<void> {
   historyTask.value = task;
   historyOpen.value = true;
@@ -126,9 +153,11 @@ async function openHistory(task: SyncTask): Promise<void> {
   }
 }
 
+/** 格式化时间戳为本地字符串。 */
 const formatTime = (ts: number | null): string =>
   ts ? new Date(ts).toLocaleString("zh-CN", { hour12: false }) : "--";
 
+/** 执行状态码转中文标签。 */
 const statusLabel = (status: string): string =>
   ({ running: "执行中", success: "成功", failed: "失败" })[status] ?? status;
 
@@ -145,7 +174,9 @@ onMounted(() => {
         <h2 class="sync-view__heading">同步任务</h2>
         <span class="sync-view__sub">Quartz 定时扫描 · 自动更新文件索引</span>
       </div>
-      <el-button type="primary" @click="openCreate"><el-icon><Plus /></el-icon>新建任务</el-button>
+      <el-button type="primary" @click="openCreate"
+        ><el-icon><Plus /></el-icon>新建任务</el-button
+      >
     </div>
 
     <!-- 统计卡 -->
@@ -160,21 +191,27 @@ onMounted(() => {
       <el-col :span="6">
         <div class="sync-view__stat">
           <div class="sync-view__stat-label">已启用</div>
-          <div class="sync-view__stat-value" style="color: #67e8a0">{{ stat.enabled }}</div>
+          <div class="sync-view__stat-value" style="color: #67e8a0">
+            {{ stat.enabled }}
+          </div>
           <div class="sync-view__stat-line" style="background: #67e8a0" />
         </div>
       </el-col>
       <el-col :span="6">
         <div class="sync-view__stat">
           <div class="sync-view__stat-label">上次成功</div>
-          <div class="sync-view__stat-value" style="color: #6ec8ff">{{ stat.success }}</div>
+          <div class="sync-view__stat-value" style="color: #6ec8ff">
+            {{ stat.success }}
+          </div>
           <div class="sync-view__stat-line" style="background: #6ec8ff" />
         </div>
       </el-col>
       <el-col :span="6">
         <div class="sync-view__stat">
           <div class="sync-view__stat-label">上次失败</div>
-          <div class="sync-view__stat-value" style="color: #f5a3a3">{{ stat.failed }}</div>
+          <div class="sync-view__stat-value" style="color: #f5a3a3">
+            {{ stat.failed }}
+          </div>
           <div class="sync-view__stat-line" style="background: #f5a3a3" />
         </div>
       </el-col>
@@ -182,37 +219,71 @@ onMounted(() => {
 
     <!-- 任务卡片 -->
     <div v-loading="loading" class="sync-view__tasks">
-      <el-empty v-if="!loading && tasks.length === 0" description="暂无同步任务，点击右上角新建" />
+      <el-empty
+        v-if="!loading && tasks.length === 0"
+        description="暂无同步任务，点击右上角新建"
+      />
 
       <div v-for="task in tasks" :key="task.id" class="sync-view__card">
         <div class="sync-view__card-head">
           <div class="sync-view__card-title">
-            <span class="sync-view__status-dot" :class="task.enabled === 1 ? 'is-on' : 'is-off'" />
+            <span
+              class="sync-view__status-dot"
+              :class="task.enabled === 1 ? 'is-on' : 'is-off'"
+            />
             {{ task.name }}
           </div>
           <div class="sync-view__card-actions">
-            <el-button link type="primary" size="small" @click="handleRun(task)">
+            <el-button
+              link
+              type="primary"
+              size="small"
+              @click="handleRun(task)"
+            >
               <el-icon><VideoPlay /></el-icon>立即执行
             </el-button>
-            <el-button link type="primary" size="small" @click="openHistory(task)">历史</el-button>
-            <el-button link type="primary" size="small" @click="openEdit(task)">编辑</el-button>
-            <el-button link type="warning" size="small" @click="handleToggle(task)">
+            <el-button
+              link
+              type="primary"
+              size="small"
+              @click="openHistory(task)"
+              >历史</el-button
+            >
+            <el-button link type="primary" size="small" @click="openEdit(task)"
+              >编辑</el-button
+            >
+            <el-button
+              link
+              type="warning"
+              size="small"
+              @click="handleToggle(task)"
+            >
               {{ task.enabled === 1 ? "停用" : "启用" }}
             </el-button>
-            <el-button link type="danger" size="small" @click="handleDelete(task)">删除</el-button>
+            <el-button
+              link
+              type="danger"
+              size="small"
+              @click="handleDelete(task)"
+              >删除</el-button
+            >
           </div>
         </div>
 
         <div class="sync-view__card-body">
           <div class="sync-view__field">
             <span class="sync-view__field-label">源目录</span>
-            <span class="sync-view__field-value">{{ task.sourceConfig || "（全根）" }}</span>
+            <span class="sync-view__field-value">{{
+              task.sourceConfig || "（全根）"
+            }}</span>
           </div>
           <div class="sync-view__field">
             <span class="sync-view__field-label">调度</span>
             <span class="sync-view__field-value">
               {{ task.cron }}
-              <span class="sync-view__cron-text">{{ cronText(task.cron) }}</span>
+              <span class="sync-view__cron-text">{{
+                cronText(task.cron)
+              }}</span>
             </span>
           </div>
           <div class="sync-view__field">
@@ -235,16 +306,26 @@ onMounted(() => {
     </div>
 
     <!-- 新建 / 编辑 -->
-    <el-dialog v-model="dialogOpen" :title="editing ? '编辑任务' : '新建任务'" width="480px">
+    <el-dialog
+      v-model="dialogOpen"
+      :title="editing ? '编辑任务' : '新建任务'"
+      width="480px"
+    >
       <el-form ref="formRef" :model="form" :rules="rules" label-width="80px">
         <el-form-item label="任务名" prop="name">
           <el-input v-model="form.name" placeholder="如：照片目录索引" />
         </el-form-item>
         <el-form-item label="源目录" prop="sourceConfig">
-          <el-input v-model="form.sourceConfig" placeholder="存储根下相对路径，如 media/photos；空表示全根" />
+          <el-input
+            v-model="form.sourceConfig"
+            placeholder="存储根下相对路径，如 media/photos；空表示全根"
+          />
         </el-form-item>
         <el-form-item label="Cron" prop="cron">
-          <el-input v-model="form.cron" placeholder="Quartz 6 段，如 0 0 3 * * ?" />
+          <el-input
+            v-model="form.cron"
+            placeholder="Quartz 6 段，如 0 0 3 * * ?"
+          />
           <div class="sync-view__presets">
             <el-tag
               v-for="preset in cronPresets"
@@ -268,15 +349,27 @@ onMounted(() => {
     </el-dialog>
 
     <!-- 执行历史 -->
-    <el-dialog v-model="historyOpen" :title="`执行历史 · ${historyTask?.name ?? ''}`" width="680px">
+    <el-dialog
+      v-model="historyOpen"
+      :title="`执行历史 · ${historyTask?.name ?? ''}`"
+      width="680px"
+    >
       <el-table v-loading="historyLoading" :data="history" size="small">
         <el-table-column label="开始时间" width="170">
-          <template #default="{ row }">{{ formatTime(row.startedAt) }}</template>
+          <template #default="{ row }">{{
+            formatTime(row.startedAt)
+          }}</template>
         </el-table-column>
         <el-table-column label="状态" width="90">
           <template #default="{ row }">
             <el-tag
-              :type="row.status === 'success' ? 'success' : row.status === 'failed' ? 'danger' : 'warning'"
+              :type="
+                row.status === 'success'
+                  ? 'success'
+                  : row.status === 'failed'
+                    ? 'danger'
+                    : 'warning'
+              "
               size="small"
             >
               {{ statusLabel(row.status) }}
@@ -284,17 +377,32 @@ onMounted(() => {
           </template>
         </el-table-column>
         <el-table-column label="新增" width="70">
-          <template #default="{ row }"><span style="color: #67e8a0">{{ row.added }}</span></template>
+          <template #default="{ row }"
+            ><span style="color: #67e8a0">{{ row.added }}</span></template
+          >
         </el-table-column>
         <el-table-column label="更新" width="70">
-          <template #default="{ row }"><span style="color: #6ec8ff">{{ row.updated }}</span></template>
+          <template #default="{ row }"
+            ><span style="color: #6ec8ff">{{ row.updated }}</span></template
+          >
         </el-table-column>
         <el-table-column label="删除" width="70">
-          <template #default="{ row }"><span style="color: #f5a3a3">{{ row.deleted }}</span></template>
+          <template #default="{ row }"
+            ><span style="color: #f5a3a3">{{ row.deleted }}</span></template
+          >
         </el-table-column>
-        <el-table-column prop="error" label="错误" min-width="120" show-overflow-tooltip />
+        <el-table-column
+          prop="error"
+          label="错误"
+          min-width="120"
+          show-overflow-tooltip
+        />
       </el-table>
-      <el-empty v-if="!historyLoading && history.length === 0" description="暂无执行记录" :image-size="60" />
+      <el-empty
+        v-if="!historyLoading && history.length === 0"
+        description="暂无执行记录"
+        :image-size="60"
+      />
     </el-dialog>
   </div>
 </template>
