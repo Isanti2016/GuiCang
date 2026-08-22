@@ -247,12 +247,13 @@ const actionLabel = (action: string): string => {
   <div class="dashboard">
     <el-row :gutter="16">
       <el-col :span="6">
-        <el-card shadow="hover">
-          <div class="stat-card">
+        <el-card shadow="never" class="stat-card">
+          <div class="stat-card__icon stat-card__icon--disk">
+            <el-icon><Coin /></el-icon>
+          </div>
+          <div class="stat-card__body">
             <div class="stat-card__label">磁盘已用</div>
-            <div class="stat-card__value">
-              {{ formatPercent(diskUsedPercent) }}
-            </div>
+            <div class="stat-card__value">{{ formatPercent(diskUsedPercent) }}</div>
             <div class="stat-card__extra">
               已用
               {{
@@ -268,8 +269,11 @@ const actionLabel = (action: string): string => {
         </el-card>
       </el-col>
       <el-col :span="6">
-        <el-card shadow="hover">
-          <div class="stat-card">
+        <el-card shadow="never" class="stat-card">
+          <div class="stat-card__icon stat-card__icon--cpu">
+            <el-icon><Cpu /></el-icon>
+          </div>
+          <div class="stat-card__body">
             <div class="stat-card__label">CPU 使用率</div>
             <div class="stat-card__value">{{ formatPercent(cpuPercent) }}</div>
             <div class="stat-card__extra">负载 {{ loadAvg }}</div>
@@ -277,8 +281,11 @@ const actionLabel = (action: string): string => {
         </el-card>
       </el-col>
       <el-col :span="6">
-        <el-card shadow="hover">
-          <div class="stat-card">
+        <el-card shadow="never" class="stat-card">
+          <div class="stat-card__icon stat-card__icon--mem">
+            <el-icon><Odometer /></el-icon>
+          </div>
+          <div class="stat-card__body">
             <div class="stat-card__label">内存使用率</div>
             <div class="stat-card__value">{{ formatPercent(memPercent) }}</div>
             <div class="stat-card__extra">
@@ -288,8 +295,11 @@ const actionLabel = (action: string): string => {
         </el-card>
       </el-col>
       <el-col :span="6">
-        <el-card shadow="hover">
-          <div class="stat-card">
+        <el-card shadow="never" class="stat-card">
+          <div class="stat-card__icon stat-card__icon--file">
+            <el-icon><Folder /></el-icon>
+          </div>
+          <div class="stat-card__body">
             <div class="stat-card__label">文件 / 用户</div>
             <div class="stat-card__value">
               {{ summary?.fileTotal ?? 0 }} / {{ summary?.userTotal ?? 0 }}
@@ -306,31 +316,51 @@ const actionLabel = (action: string): string => {
 
     <el-row :gutter="16" class="dashboard__charts">
       <el-col :span="16">
-        <el-card shadow="hover" header="CPU 使用率趋势（30s）">
-          <div ref="trendRef" class="dashboard__chart" />
+        <el-card shadow="never" class="chart-card">
+          <template #header>
+            <span class="chart-card__title">CPU 使用率趋势</span>
+            <span class="chart-card__sub">30s 采样 · 近 2 小时</span>
+          </template>
+          <div ref="trendRef" class="dashboard__chart dashboard__chart--wide" />
         </el-card>
       </el-col>
       <el-col :span="8">
-        <el-card shadow="hover" header="磁盘占用">
-          <div ref="diskRef" class="dashboard__chart" />
+        <el-card shadow="never" class="chart-card">
+          <template #header>
+            <span class="chart-card__title">磁盘占用</span>
+            <span class="chart-card__sub">已用 / 可用</span>
+          </template>
+          <div ref="diskRef" class="dashboard__chart dashboard__chart--tall" />
         </el-card>
       </el-col>
     </el-row>
 
     <el-row :gutter="16" class="dashboard__charts">
-      <el-col :span="12">
-        <el-card shadow="hover" header="文件类型分布">
-          <div ref="fileTypeRef" class="dashboard__chart" />
+      <el-col :span="8">
+        <el-card shadow="never" class="chart-card">
+          <template #header>
+            <span class="chart-card__title">文件类型分布</span>
+            <span class="chart-card__sub">图片 / 视频 / 文档</span>
+          </template>
+          <div ref="fileTypeRef" class="dashboard__chart dashboard__chart--tall" />
         </el-card>
       </el-col>
-      <el-col :span="12">
-        <el-card shadow="hover" header="用户存储占用">
-          <div ref="userStorageRef" class="dashboard__chart" />
+      <el-col :span="16">
+        <el-card shadow="never" class="chart-card">
+          <template #header>
+            <span class="chart-card__title">用户存储占用</span>
+            <span class="chart-card__sub">按用户聚合（前 10）</span>
+          </template>
+          <div ref="userStorageRef" class="dashboard__chart dashboard__chart--wide" />
         </el-card>
       </el-col>
     </el-row>
 
-    <el-card shadow="hover" header="最近操作">
+    <el-card shadow="never" class="chart-card dashboard__ops">
+      <template #header>
+        <span class="chart-card__title">最近操作</span>
+        <span class="chart-card__sub">实时审计动态</span>
+      </template>
       <el-table :data="recentOperations" size="small">
         <el-table-column prop="username" label="用户" width="140" />
         <el-table-column label="操作" width="140">
@@ -364,27 +394,152 @@ const actionLabel = (action: string): string => {
 </template>
 
 <style scoped>
+.stat-card {
+  border: 1px solid rgba(126, 210, 255, 0.18);
+  background: linear-gradient(160deg, rgba(8, 26, 54, 0.72), rgba(4, 16, 38, 0.78));
+  backdrop-filter: blur(10px);
+  border-radius: 14px;
+  overflow: hidden;
+  transition:
+    transform 0.25s ease,
+    border-color 0.25s ease,
+    box-shadow 0.25s ease;
+}
+
+.stat-card:hover {
+  transform: translateY(-3px);
+  border-color: rgba(212, 175, 55, 0.5);
+  box-shadow: 0 10px 30px rgba(2, 10, 26, 0.6);
+}
+
+.stat-card :deep(.el-card__body) {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 18px 20px;
+}
+
+.stat-card__icon {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 52px;
+  height: 52px;
+  border-radius: 12px;
+  font-size: 26px;
+  color: #bfe9ff;
+  border: 1px solid rgba(126, 210, 255, 0.25);
+  background: rgba(110, 200, 255, 0.08);
+}
+
+.stat-card__icon--disk {
+  color: #6ec8ff;
+  background: linear-gradient(135deg, rgba(110, 200, 255, 0.16), rgba(43, 111, 212, 0.08));
+}
+
+.stat-card__icon--cpu {
+  color: #d4af37;
+  background: linear-gradient(135deg, rgba(212, 175, 55, 0.18), rgba(212, 175, 55, 0.06));
+}
+
+.stat-card__icon--mem {
+  color: #67e0a3;
+  background: linear-gradient(135deg, rgba(103, 224, 163, 0.16), rgba(103, 224, 163, 0.05));
+}
+
+.stat-card__icon--file {
+  color: #c9a8ff;
+  background: linear-gradient(135deg, rgba(201, 168, 255, 0.16), rgba(201, 168, 255, 0.05));
+}
+
+.stat-card__body {
+  min-width: 0;
+}
+
 .stat-card__label {
-  color: var(--el-text-color-secondary);
-  font-size: 13px;
+  color: rgba(159, 198, 234, 0.8);
+  font-size: 12px;
+  letter-spacing: 1px;
 }
 
 .stat-card__value {
-  font-size: 26px;
+  font-size: 24px;
   font-weight: 600;
-  margin: 8px 0 4px;
+  margin: 4px 0 2px;
+  color: #eaf6ff;
+  font-variant-numeric: tabular-nums;
 }
 
 .stat-card__extra {
-  color: var(--el-text-color-secondary);
+  color: rgba(159, 198, 234, 0.65);
   font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .dashboard__charts {
-  margin: 16px 0;
+  margin: 16px 0 0;
+}
+
+.chart-card {
+  border: 1px solid rgba(126, 210, 255, 0.18);
+  background: linear-gradient(160deg, rgba(8, 26, 54, 0.72), rgba(4, 16, 38, 0.78));
+  backdrop-filter: blur(10px);
+  border-radius: 14px;
+  box-shadow: 0 10px 40px rgba(2, 10, 26, 0.55);
+}
+
+.chart-card :deep(.el-card__header) {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  border-bottom: 1px solid rgba(212, 175, 55, 0.22);
+  padding: 12px 18px;
+}
+
+.chart-card__title {
+  font-size: 15px;
+  font-weight: 600;
+  color: #eaf6ff;
+  letter-spacing: 1px;
+}
+
+.chart-card__sub {
+  font-size: 12px;
+  color: rgba(159, 198, 234, 0.6);
 }
 
 .dashboard__chart {
-  height: 300px;
+  height: 280px;
+}
+
+.dashboard__chart--wide {
+  height: 320px;
+}
+
+.dashboard__chart--tall {
+  height: 320px;
+}
+
+.dashboard__ops {
+  margin-top: 16px;
+}
+
+.dashboard__ops :deep(.el-table) {
+  --el-table-bg-color: transparent;
+  --el-table-tr-bg-color: transparent;
+  --el-table-header-bg-color: rgba(110, 200, 255, 0.08);
+  --el-table-header-text-color: #bfe9ff;
+  --el-table-border-color: rgba(126, 210, 255, 0.12);
+  --el-table-row-hover-bg-color: rgba(110, 200, 255, 0.08);
+  --el-table-text-color: #cfe7f8;
+  --el-table-expanded-cell-bg-color: transparent;
+  background: transparent;
+}
+
+.dashboard__ops :deep(.el-table__inner-wrapper::before) {
+  display: none;
 }
 </style>

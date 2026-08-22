@@ -65,10 +65,18 @@ public class AuditServiceImpl implements AuditService {
     return auditLogMapper.selectCount(wrapper(username, action, result));
   }
 
+  /**
+   * 审计查询条件构造：用户名/动作模糊匹配，结果精确匹配；空值条件自动忽略。
+   *
+   * @param username 按操作者模糊筛选（可空）
+   * @param action 按动作模糊筛选（可空）
+   * @param result 按结果精确筛选（可空）
+   * @return 查询包装器
+   */
   private LambdaQueryWrapper<AuditLog> wrapper(String username, String action, String result) {
     return new LambdaQueryWrapper<AuditLog>()
-        .eq(username != null && !username.isBlank(), AuditLog::getUsername, username)
-        .eq(action != null && !action.isBlank(), AuditLog::getAction, action)
+        .like(username != null && !username.isBlank(), AuditLog::getUsername, username)
+        .like(action != null && !action.isBlank(), AuditLog::getAction, action)
         .eq(result != null && !result.isBlank(), AuditLog::getResult, result);
   }
 }

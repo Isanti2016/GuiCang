@@ -62,7 +62,12 @@ public class AuditAspect {
       detail = e.getClass().getSimpleName();
       throw e;
     } finally {
-      recordAudit(audit, resolveResource(audit.resource(), joinPoint, returnValue), result, detail);
+      recordAudit(
+          joinPoint,
+          audit,
+          resolveResource(audit.resource(), joinPoint, returnValue),
+          result,
+          detail);
     }
   }
 
@@ -96,11 +101,12 @@ public class AuditAspect {
     return context;
   }
 
-  private void recordAudit(Audit audit, String resource, String result, String detail) {
+  private void recordAudit(
+      ProceedingJoinPoint joinPoint, Audit audit, String resource, String result, String detail) {
     try {
       auditService.record(
           new AuditLogCreateDTO(
-              currentUserResolver.currentUsername().orElse(null),
+              resolveUsername(audit, joinPoint),
               audit.action(),
               resource,
               resolveClientIp(),
@@ -111,6 +117,42 @@ public class AuditAspect {
       // 审计为尽力而为，失败不应影响业务
       log.error("审计记录写入失败: action={}", audit.action(), e);
     }
+  }
+
+  /**
+   * 解析操作者用户名：优先取当前登录用户；未登录（如登录动作本身）时从方法参数中查找 带 username() 访问器的对象（如 LoginRequest）兜底。
+   *
+   * @param audit 审计注解（暂留，便于后续扩展按注解指定取参路径）
+   * @param joinPoint 被拦截方法的连接点
+   * @return 操作者用户名；解析不到返回 null
+   */
+  private String resolveUsername(Audit audit, ProceedingJoinPoint joinPoint) {
+    return currentUserResolver
+        .currentUsername()
+        .orElseGet(() -> extractUsernameFromArgs(joinPoint.getArgs()));
+  }
+
+  private String extractUsernameFromArgs(Object[] args) {
+    if (args == null) {
+      return null;
+    }
+    for (Object arg : args) {
+      if (arg == null) {
+        continue;
+      }
+      try {
+        Method usernameMethod = arg.getClass().getMethod("username");
+        if (usernameMethod.getReturnType() == String.class) {
+          String username = (String) usernameMethod.invoke(arg);
+          if (username != null && !username.isBlank()) {
+            return username;
+          }
+        }
+      } catch (ReflectiveOperationException | SecurityException e) {
+        // 参数无 username() 访问器，跳过继续查找
+      }
+    }
+    return null;
   }
 
   private String resolveClientIp() {

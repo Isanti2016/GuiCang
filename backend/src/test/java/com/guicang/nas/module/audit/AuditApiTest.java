@@ -89,6 +89,31 @@ class AuditApiTest {
   }
 
   @Test
+  void 用户名与动作模糊搜索() throws Exception {
+    insertAudit("admin", "file.upload", "success");
+    insertAudit("admin", "user.create", "success");
+    insertAudit("bob", "file.write", "failed");
+
+    // 用户名部分匹配：ad 命中 admin 的 2 条
+    mockMvc
+        .perform(
+            get("/api/v1/audit/logs")
+                .param("username", "ad")
+                .header("Authorization", bearer(adminToken)))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.data.total").value(2));
+
+    // 动作部分匹配：file 命中 file.upload 与 file.write 共 2 条
+    mockMvc
+        .perform(
+            get("/api/v1/audit/logs")
+                .param("action", "file")
+                .header("Authorization", bearer(adminToken)))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.data.total").value(2));
+  }
+
+  @Test
   void 分页截断() throws Exception {
     for (int i = 0; i < 5; i++) {
       insertAudit("admin", "login", "success");
