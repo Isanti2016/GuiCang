@@ -25,7 +25,7 @@
 - 新建模块时先建 `module/<功能>` 目录，不把 Controller/Service/Mapper 平铺到全局单一目录。
 
 ### 3.1 分层硬约束
-- Controller 只做请求响应与参数校验，不写业务，只转发 Service。
+- Controller 只做请求响应与参数校验，不写业务，只转发 Service；不得包含 private 业务方法或内部类（响应组装细节下沉到独立组件，如 FileStreamResponder）。
 - Service / ServiceImpl 做业务与事务；多步数据库操作必须 @Transactional。
 - Mapper（MyBatis-Plus）做数据访问；ServiceImpl 不得绕过 Mapper 直接查库。
 - Controller 不得直接访问 Mapper；层间只传 DTO；实体只用于承载查询结果。
@@ -60,6 +60,12 @@
 - 类 PascalCase、方法/字段 camelCase、常量 UPPER_SNAKE_CASE。
 - Controller/Service/Mapper 后缀；构造器注入。
 - 格式化：Spotless + Google Java Format；日志 SLF4J 结构化 JSON，敏感信息脱敏。
+
+### 3.9 后端注释规范（硬性）
+- 所有公开 API（Controller 方法、Service 接口与实现类方法、公共工具方法）必须使用标准多行 Javadoc：`/** 摘要。` + 空行 + 每个参数的 `@param 名 中文说明` + 非 void 返回的 `@return 中文说明`（+ `@throws` 当方法声明异常）。
+- ServiceImpl 的 @Override 方法同样需要完整 Javadoc（摘要可从接口方法复制/改写，参数与返回标注完整），不允许只依赖接口注释。
+- 私有方法可不加 Javadoc；禁止用注释替代清晰命名、禁止复制冗余注释。
+- 新增/修改代码必须同步补注释，否则视为未完成。
 
 ## 4. 前端规范
 

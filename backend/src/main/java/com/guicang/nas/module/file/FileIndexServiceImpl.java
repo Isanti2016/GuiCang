@@ -15,6 +15,16 @@ public class FileIndexServiceImpl implements FileIndexService {
     this.fileIndexMapper = fileIndexMapper;
   }
 
+  /**
+   * 新增/更新索引（path 唯一，存在则更新）。
+   *
+   * @param relativePath 文件相对路径
+   * @param name 文件名
+   * @param kind 文件类型（dir/image/video/note/other）
+   * @param size 文件大小（字节，目录为 null）
+   * @param mtime 修改时间（毫秒时间戳，可空）
+   * @param owner 属主用户名
+   */
   @Override
   @Transactional
   public void upsert(
@@ -43,6 +53,11 @@ public class FileIndexServiceImpl implements FileIndexService {
     fileIndexMapper.insert(index);
   }
 
+  /**
+   * 删除索引（目录删除时连同子项索引一并移除）。
+   *
+   * @param relativePath 文件相对路径
+   */
   @Override
   @Transactional
   public void remove(String relativePath) {
@@ -53,6 +68,12 @@ public class FileIndexServiceImpl implements FileIndexService {
         new LambdaQueryWrapper<FileIndex>().likeRight(FileIndex::getPath, relativePath + "/"));
   }
 
+  /**
+   * 重命名/移动后更新路径（目录时其下所有子项路径一并迁移）。
+   *
+   * @param oldPath 旧路径
+   * @param newPath 新路径
+   */
   @Override
   @Transactional
   public void rename(String oldPath, String newPath) {
@@ -77,6 +98,12 @@ public class FileIndexServiceImpl implements FileIndexService {
     fileIndexMapper.updateById(existing);
   }
 
+  /**
+   * 按名称关键字搜索（LIKE 匹配 name 与 path）。
+   *
+   * @param keyword 搜索关键字
+   * @return 匹配的索引列表
+   */
   @Override
   public List<FileIndex> search(String keyword) {
     if (keyword == null || keyword.isBlank()) {
@@ -90,6 +117,12 @@ public class FileIndexServiceImpl implements FileIndexService {
             .orderByAsc(FileIndex::getPath));
   }
 
+  /**
+   * 按路径前缀查询（含前缀自身，用于目录扫描对比）。
+   *
+   * @param prefix 路径前缀（空则返回全部）
+   * @return 匹配的索引列表
+   */
   @Override
   public List<FileIndex> listByPrefix(String prefix) {
     if (prefix == null || prefix.isBlank()) {

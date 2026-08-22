@@ -46,11 +46,22 @@ public class SetupServiceImpl implements SetupService {
     this.sysRoleMapper = sysRoleMapper;
   }
 
+  /**
+   * 当前初始化状态。
+   *
+   * @return 初始化状态（是否完成 + 存储根路径）
+   */
   @Override
   public SetupStatusResponse status() {
     return new SetupStatusResponse(isInitialized(), storageRoot);
   }
 
+  /**
+   * 执行初始化（新建管理员元数据 + 触发系统账号供给 + 写完成标记；重复初始化被拒绝）。
+   *
+   * @param request 初始化请求（管理员用户名/显示名）
+   * @return 初始化后的状态（已置为完成）
+   */
   @Override
   @Transactional
   @Audit(action = "setup.init", resource = "#request.username()")

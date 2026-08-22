@@ -21,13 +21,22 @@ public class SetupController {
     this.setupService = setupService;
   }
 
-  /** 是否已初始化（前端据此跳转 /setup 向导）。 */
+  /**
+   * 是否已初始化（前端据此跳转 /setup 向导）。
+   *
+   * @return 初始化状态
+   */
   @GetMapping("/status")
   public Result<SetupStatusResponse> status() {
     return Result.ok(setupService.status());
   }
 
-  /** 执行初始化，完成后锁定。 */
+  /**
+   * 执行初始化，完成后锁定。
+   *
+   * @param request 初始化请求体
+   * @return 初始化后的状态
+   */
   @PostMapping("/init")
   public Result<SetupStatusResponse> init(@Valid @RequestBody SetupInitRequest request) {
     return Result.ok(setupService.init(request));

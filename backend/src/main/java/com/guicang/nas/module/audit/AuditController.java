@@ -20,7 +20,16 @@ public class AuditController {
     this.auditService = auditService;
   }
 
-  /** 审计记录列表（筛选 + 分页）。 */
+  /**
+   * 审计记录列表（筛选 + 分页）。
+   *
+   * @param username 用户名筛选（可选）
+   * @param action 动作筛选（可选）
+   * @param result 结果筛选（可选）
+   * @param page 页码（从 1 开始）
+   * @param size 每页条数
+   * @return 审计分页结果（记录 + 总数）
+   */
   @GetMapping("/logs")
   public Result<AuditPage> logs(
       @RequestParam(required = false) String username,

@@ -30,26 +30,46 @@ public class RoleController {
     this.roleService = roleService;
   }
 
-  /** 角色列表。 */
+  /**
+   * 角色列表。
+   *
+   * @return 角色列表
+   */
   @GetMapping
   public Result<List<RoleVO>> list() {
     return Result.ok(roleService.listRoles());
   }
 
-  /** 新建角色。 */
+  /**
+   * 新建角色。
+   *
+   * @param request 角色创建请求体
+   * @return 新建的角色
+   */
   @PostMapping
   public Result<RoleVO> create(@Valid @RequestBody RoleUpsertRequest request) {
     return Result.ok(roleService.createRole(request));
   }
 
-  /** 编辑角色。 */
+  /**
+   * 编辑角色。
+   *
+   * @param id 角色 ID
+   * @param request 角色编辑请求体
+   * @return 更新后的角色
+   */
   @PutMapping("/{id}")
   public Result<RoleVO> update(
       @PathVariable @NotNull Long id, @Valid @RequestBody RoleUpsertRequest request) {
     return Result.ok(roleService.updateRole(id, request));
   }
 
-  /** 删除角色。 */
+  /**
+   * 删除角色。
+   *
+   * @param id 角色 ID
+   * @return 空结果
+   */
   @DeleteMapping("/{id}")
   public Result<Void> delete(@PathVariable @NotNull Long id) {
     roleService.deleteRole(id);

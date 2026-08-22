@@ -57,6 +57,12 @@ public class FileServiceImpl implements FileService {
     this.trashItemMapper = trashItemMapper;
   }
 
+  /**
+   * 目录列表（需 READ 权限）。
+   *
+   * @param path 存储根下相对路径
+   * @return 目录下的文件条目列表
+   */
   @Override
   public List<FileEntry> list(String path) {
     AuthenticatedUser user = requireUser();
@@ -64,6 +70,11 @@ public class FileServiceImpl implements FileService {
     return storageService.list(path);
   }
 
+  /**
+   * 新建目录（需 WRITE 权限）。
+   *
+   * @param path 要创建的目录相对路径
+   */
   @Override
   @Audit(action = "file.mkdir", resource = "#path")
   public void mkdir(String path) {
@@ -73,6 +84,12 @@ public class FileServiceImpl implements FileService {
     indexDir(path, user.username());
   }
 
+  /**
+   * 重命名（需 WRITE 权限）。
+   *
+   * @param path 原相对路径
+   * @param newName 新名称
+   */
   @Override
   @Audit(action = "file.rename", resource = "#path")
   public void rename(String path, String newName) {
@@ -83,6 +100,12 @@ public class FileServiceImpl implements FileService {
     fileIndexService.rename(path, newPath);
   }
 
+  /**
+   * 移动（源需 WRITE，目标目录需 WRITE）。
+   *
+   * @param path 源相对路径
+   * @param target 目标目录（空或 . 表示根目录）
+   */
   @Override
   @Audit(action = "file.move", resource = "#path")
   public void move(String path, String target) {
@@ -96,6 +119,12 @@ public class FileServiceImpl implements FileService {
     fileIndexService.rename(path, newPath);
   }
 
+  /**
+   * 删除（软删除：移入回收站，可恢复；需 WRITE 权限）。
+   *
+   * @param path 要删除的相对路径
+   * @param recursive 是否递归删除（软删除实现下统一移入回收站，参数保留兼容）
+   */
   @Override
   @Audit(action = "file.delete", resource = "#path")
   public void delete(String path, boolean recursive) {
@@ -116,6 +145,11 @@ public class FileServiceImpl implements FileService {
     fileIndexService.remove(path);
   }
 
+  /**
+   * 回收站列表（管理员可见全部，普通用户仅本人）。
+   *
+   * @return 回收站条目列表
+   */
   @Override
   public List<TrashItem> listTrash() {
     AuthenticatedUser user = requireUser();
@@ -129,6 +163,11 @@ public class FileServiceImpl implements FileService {
             .orderByDesc(TrashItem::getDeletedAt));
   }
 
+  /**
+   * 恢复回收站条目到原路径（原位置被占用时提示）。
+   *
+   * @param id 回收站条目 ID
+   */
   @Override
   @Audit(action = "file.restore", resource = "#id")
   public void restoreTrash(Long id) {
@@ -151,6 +190,11 @@ public class FileServiceImpl implements FileService {
     }
   }
 
+  /**
+   * 彻底删除回收站条目（不可恢复）。
+   *
+   * @param id 回收站条目 ID
+   */
   @Override
   @Audit(action = "file.purge", resource = "#id")
   public void purgeTrash(Long id) {
@@ -160,6 +204,7 @@ public class FileServiceImpl implements FileService {
     trashItemMapper.deleteById(id);
   }
 
+  /** 清空回收站（管理员或本人）。 */
   @Override
   @Audit(action = "file.trash.empty")
   public void emptyTrash() {
@@ -198,6 +243,13 @@ public class FileServiceImpl implements FileService {
     }
   }
 
+  /**
+   * 上传文件到目录（需 WRITE 权限；校验大小与扩展名；流式写盘 + 原子改名）。
+   *
+   * @param dirPath 目标目录（空或 . 表示根目录）
+   * @param file 上传的文件
+   * @return 上传后的文件条目
+   */
   @Override
   @Audit(action = "file.upload", resource = "#dirPath + '/' + #file.originalFilename")
   public FileEntry upload(String dirPath, MultipartFile file) {
@@ -234,6 +286,12 @@ public class FileServiceImpl implements FileService {
     return entry;
   }
 
+  /**
+   * 文件流信息（需 READ 权限；用于下载/预览 Range 响应）。
+   *
+   * @param path 文件相对路径
+   * @return 文件流信息（含绝对路径、大小与 Content-Type）
+   */
   @Override
   public FileStreamInfo stream(String path) {
     AuthenticatedUser user = requireUser();
@@ -247,6 +305,12 @@ public class FileServiceImpl implements FileService {
     }
   }
 
+  /**
+   * 读取文本内容（需 READ 权限；限大小）。
+   *
+   * @param path 文本文件相对路径
+   * @return 文本内容
+   */
   @Override
   public String readText(String path) {
     AuthenticatedUser user = requireUser();
@@ -255,6 +319,12 @@ public class FileServiceImpl implements FileService {
     return storageService.readText(path, maxTextSizeBytes);
   }
 
+  /**
+   * 保存文本内容（需 WRITE 权限；仅允许 md/txt/markdown 扩展名）。
+   *
+   * @param path 文本文件相对路径
+   * @param content 文本内容
+   */
   @Override
   @Audit(action = "file.write", resource = "#path")
   public void writeText(String path, String content) {
@@ -269,6 +339,12 @@ public class FileServiceImpl implements FileService {
     }
   }
 
+  /**
+   * 按名称/路径关键字搜索（索引查询 + 权限过滤）。
+   *
+   * @param keyword 搜索关键字
+   * @return 匹配且当前用户可读的文件条目列表
+   */
   @Override
   public List<FileEntry> search(String keyword) {
     AuthenticatedUser user = requireUser();
@@ -289,6 +365,12 @@ public class FileServiceImpl implements FileService {
         .toList();
   }
 
+  /**
+   * 递归收集目录下图片/视频（相册数据源；需 READ 权限；限制深度与数量）。
+   *
+   * @param path 起始目录相对路径
+   * @return 收集到的图片/视频条目列表
+   */
   @Override
   public List<FileEntry> media(String path) {
     AuthenticatedUser user = requireUser();
@@ -349,6 +431,12 @@ public class FileServiceImpl implements FileService {
     }
   }
 
+  /**
+   * 图片缩略图（需 READ 权限；懒生成 + 磁盘缓存，返回缩略图流信息）。
+   *
+   * @param path 图片/视频文件相对路径
+   * @return 缩略图流信息
+   */
   @Override
   public FileStreamInfo thumbnail(String path) {
     AuthenticatedUser user = requireUser();

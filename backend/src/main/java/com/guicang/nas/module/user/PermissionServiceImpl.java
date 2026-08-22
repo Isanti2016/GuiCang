@@ -14,6 +14,11 @@ public class PermissionServiceImpl implements PermissionService {
     this.sysPermissionMapper = sysPermissionMapper;
   }
 
+  /**
+   * 全部权限点列表。
+   *
+   * @return 权限点列表
+   */
   @Override
   public List<PermissionVO> listAll() {
     return sysPermissionMapper.selectList(null).stream()

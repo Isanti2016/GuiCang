@@ -31,6 +31,14 @@ public class DirPermissionServiceImpl implements DirPermissionService {
     this.sysUserDirMapper = sysUserDirMapper;
   }
 
+  /**
+   * 校验用户对路径的目录级权限，不满足抛 {@link com.guicang.nas.common.BizException}。
+   *
+   * @param username 用户名
+   * @param authorities 角色/权限（ROLE_xxx + 权限码）
+   * @param relativePath 存储根下相对路径
+   * @param required 所需权限
+   */
   @Override
   public void check(
       String username, List<String> authorities, String relativePath, DirPerm required) {
@@ -44,6 +52,15 @@ public class DirPermissionServiceImpl implements DirPermissionService {
     }
   }
 
+  /**
+   * 是否具备对路径的目录级权限（不抛异常，用于搜索过滤等场景）。
+   *
+   * @param username 用户名
+   * @param authorities 角色/权限（ROLE_xxx + 权限码）
+   * @param relativePath 存储根下相对路径
+   * @param required 所需权限
+   * @return 是否具备该权限
+   */
   @Override
   public boolean has(
       String username, List<String> authorities, String relativePath, DirPerm required) {

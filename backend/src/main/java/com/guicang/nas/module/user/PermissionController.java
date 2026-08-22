@@ -20,7 +20,11 @@ public class PermissionController {
     this.permissionService = permissionService;
   }
 
-  /** 全部权限点列表。 */
+  /**
+   * 全部权限点列表。
+   *
+   * @return 权限点列表
+   */
   @GetMapping
   public Result<List<PermissionVO>> list() {
     return Result.ok(permissionService.listAll());

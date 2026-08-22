@@ -33,11 +33,22 @@ public class RoleServiceImpl implements RoleService {
     this.sysUserMapper = sysUserMapper;
   }
 
+  /**
+   * 角色列表（含授权权限编码）。
+   *
+   * @return 角色列表
+   */
   @Override
   public List<RoleVO> listRoles() {
     return sysRoleMapper.selectList(null).stream().map(this::toVO).toList();
   }
 
+  /**
+   * 新建角色。
+   *
+   * @param request 创建请求（编码/名称/描述/授权权限）
+   * @return 创建后的角色
+   */
   @Override
   @Transactional
   @Audit(action = "role.create", resource = "#request.code()")
@@ -56,6 +67,13 @@ public class RoleServiceImpl implements RoleService {
     return toVO(role);
   }
 
+  /**
+   * 编辑角色（内置角色仅可改授权与描述，不可改编码）。
+   *
+   * @param id 角色 ID
+   * @param request 更新请求（编码/名称/描述/授权权限）
+   * @return 更新后的角色
+   */
   @Override
   @Transactional
   @Audit(action = "role.update", resource = "#request.code()")
@@ -75,6 +93,11 @@ public class RoleServiceImpl implements RoleService {
     return toVO(role);
   }
 
+  /**
+   * 删除角色（内置角色与已分配用户角色不可删）。
+   *
+   * @param id 角色 ID
+   */
   @Override
   @Transactional
   @Audit(action = "role.delete", resource = "#id")

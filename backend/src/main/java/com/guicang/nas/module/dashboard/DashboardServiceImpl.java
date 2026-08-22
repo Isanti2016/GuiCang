@@ -36,6 +36,11 @@ public class DashboardServiceImpl implements DashboardService {
     this.auditLogMapper = auditLogMapper;
   }
 
+  /**
+   * 大屏聚合：存储/文件统计/用户数/最近操作。
+   *
+   * @return 大屏聚合数据
+   */
   @Override
   public DashboardSummary summary() {
     HostMetrics latest = metricsService.latest();

@@ -24,26 +24,44 @@ public class AuthController {
     this.authService = authService;
   }
 
-  /** 登录：PAM 校验通过后返回 JWT 与用户信息。 */
+  /**
+   * 登录：PAM 校验通过后返回 JWT 与用户信息。
+   *
+   * @param request 登录请求体（用户名 + 密码）
+   * @return JWT 与当前用户信息
+   */
   @PostMapping("/login")
   public Result<LoginResponse> login(@Valid @RequestBody LoginRequest request) {
     return Result.ok(authService.login(request));
   }
 
-  /** 当前登录用户。 */
+  /**
+   * 当前登录用户。
+   *
+   * @return 当前登录用户信息
+   */
   @GetMapping("/me")
   public Result<CurrentUserInfo> me() {
     return Result.ok(authService.me());
   }
 
-  /** 登出（客户端丢弃令牌）。 */
+  /**
+   * 登出（客户端丢弃令牌）。
+   *
+   * @return 空结果
+   */
   @PostMapping("/logout")
   public Result<Void> logout() {
     authService.logout();
     return Result.ok();
   }
 
-  /** 修改本人密码（校验旧密码，同步系统账号）。 */
+  /**
+   * 修改本人密码（校验旧密码，同步系统账号）。
+   *
+   * @param request 改密请求体（旧密码 + 新密码）
+   * @return 空结果
+   */
   @PutMapping("/password")
   public Result<Void> changePassword(@Valid @RequestBody ChangePasswordRequest request) {
     authService.changePassword(request.oldPassword(), request.newPassword());

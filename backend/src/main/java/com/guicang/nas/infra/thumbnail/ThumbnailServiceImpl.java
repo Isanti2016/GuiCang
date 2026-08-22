@@ -39,6 +39,13 @@ public class ThumbnailServiceImpl implements ThumbnailService {
     this.ffmpegPath = ffmpegPath;
   }
 
+  /**
+   * 生成（或取缓存）图片缩略图（Thumbnailator）。
+   *
+   * @param sourceFile 原图路径（已校验）
+   * @param cacheKey 缓存键（含路径/大小/修改时间的指纹，文件变化自动失效）
+   * @return 缩略图文件路径
+   */
   @Override
   public Path thumbnail(Path sourceFile, String cacheKey) {
     Path thumb = thumbPath(cacheKey);
@@ -58,6 +65,13 @@ public class ThumbnailServiceImpl implements ThumbnailService {
     }
   }
 
+  /**
+   * 生成（或取缓存）视频封面（ffmpeg -ss 1s 抽帧）。
+   *
+   * @param sourceFile 视频路径（已校验）
+   * @param cacheKey 缓存键（含路径/大小/修改时间的指纹）
+   * @return 封面文件路径
+   */
   @Override
   public Path videoThumbnail(Path sourceFile, String cacheKey) {
     Path thumb = thumbPath(cacheKey);

@@ -45,6 +45,12 @@ public class UserServiceImpl implements UserService {
     this.systemAccountProvisioner = systemAccountProvisioner;
   }
 
+  /**
+   * 新建用户（创建系统账号 + 写 sys_user）。
+   *
+   * @param request 创建请求（用户名/密码/角色/配额等）
+   * @return 创建后的用户视图
+   */
   @Override
   @Transactional
   @Audit(action = "user.create", resource = "#request.username()")
@@ -78,6 +84,13 @@ public class UserServiceImpl implements UserService {
     return toVO(user, role);
   }
 
+  /**
+   * 编辑用户元数据。
+   *
+   * @param username 用户名
+   * @param request 更新请求（显示名/邮箱/角色/配额等）
+   * @return 更新后的用户视图
+   */
   @Override
   @Transactional
   @Audit(action = "user.update", resource = "#username")
@@ -93,6 +106,13 @@ public class UserServiceImpl implements UserService {
     return toVO(user, role);
   }
 
+  /**
+   * 启用/禁用（同步系统账号锁定状态；内置 admin 不可停用）。
+   *
+   * @param username 用户名
+   * @param request 状态请求（是否启用）
+   * @return 更新后的用户视图
+   */
   @Override
   @Transactional
   @Audit(action = "user.status", resource = "#username")
@@ -111,6 +131,12 @@ public class UserServiceImpl implements UserService {
     return toVO(user, requireRole(user.getRoleId()));
   }
 
+  /**
+   * 重置密码（同步 Linux + Samba）。
+   *
+   * @param username 用户名
+   * @param request 密码请求（新密码）
+   */
   @Override
   @Transactional
   @Audit(action = "user.password", resource = "#username")
@@ -123,6 +149,12 @@ public class UserServiceImpl implements UserService {
     }
   }
 
+  /**
+   * 删除用户（默认保留个人目录，可选一并删除；内置 admin 不可删）。
+   *
+   * @param username 用户名
+   * @param removeHome 是否同时删除个人目录
+   */
   @Override
   @Transactional
   @Audit(action = "user.delete", resource = "#username")
@@ -138,6 +170,14 @@ public class UserServiceImpl implements UserService {
     sysUserMapper.delete(new LambdaQueryWrapper<SysUser>().eq(SysUser::getUsername, username));
   }
 
+  /**
+   * 用户列表（分页 + 关键字）。
+   *
+   * @param page 页码（从 1 起）
+   * @param size 每页条数
+   * @param keyword 关键字（用户名/显示名模糊匹配，可空）
+   * @return 分页结果（记录 + 总数）
+   */
   @Override
   public UserPage listUsers(long page, long size, String keyword) {
     LambdaQueryWrapper<SysUser> wrapper = new LambdaQueryWrapper<>();
@@ -157,12 +197,24 @@ public class UserServiceImpl implements UserService {
     return new UserPage(records, total);
   }
 
+  /**
+   * 用户详情。
+   *
+   * @param username 用户名
+   * @return 用户视图
+   */
   @Override
   public UserVO getUser(String username) {
     SysUser user = requireUser(username);
     return toVO(user, requireRole(user.getRoleId()));
   }
 
+  /**
+   * 按用户名查 sys_user（登录用）。
+   *
+   * @param username 用户名
+   * @return 用户实体（不存在时为空）
+   */
   @Override
   public Optional<SysUser> findByUsername(String username) {
     return Optional.ofNullable(
@@ -170,6 +222,12 @@ public class UserServiceImpl implements UserService {
             new LambdaQueryWrapper<SysUser>().eq(SysUser::getUsername, username)));
   }
 
+  /**
+   * 装载用户角色与权限（登录用）：返回 [ROLE_xxx, permission.code, ...]。
+   *
+   * @param username 用户名
+   * @return 权限列表（用户不存在或停用时为空）
+   */
   @Override
   public List<String> loadAuthorities(String username) {
     SysUser user =

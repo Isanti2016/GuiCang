@@ -57,11 +57,23 @@ public class MetricsServiceImpl implements MetricsService {
     }
   }
 
+  /**
+   * 最近一次指标快照（可能为 null，首次采集前）。
+   *
+   * @return 最近一次指标快照
+   */
   @Override
   public HostMetrics latest() {
     return latest;
   }
 
+  /**
+   * 指标序列。
+   *
+   * @param metric cpu / mem / disk / net
+   * @param granularity fine（2h 30s 粒度）或 coarse（24h 5min 粒度），其他值默认 coarse
+   * @return 指标时间序列
+   */
   @Override
   public List<SeriesPoint> series(String metric, String granularity) {
     boolean fine = "fine".equalsIgnoreCase(granularity);

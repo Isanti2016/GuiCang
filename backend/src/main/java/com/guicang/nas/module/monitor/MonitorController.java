@@ -21,13 +21,23 @@ public class MonitorController {
     this.metricsService = metricsService;
   }
 
-  /** 实时指标快照。 */
+  /**
+   * 实时指标快照。
+   *
+   * @return 主机实时指标快照
+   */
   @GetMapping("/overview")
   public Result<HostMetrics> overview() {
     return Result.ok(metricsService.latest());
   }
 
-  /** 历史序列（granularity=fine 2h / coarse 24h）。 */
+  /**
+   * 历史序列（granularity=fine 2h / coarse 24h）。
+   *
+   * @param metric 指标名（默认 cpu）
+   * @param granularity 采样粒度（fine 近 2 小时 / coarse 近 24 小时）
+   * @return 历史序列点列表
+   */
   @GetMapping("/series")
   public Result<List<SeriesPoint>> series(
       @RequestParam(defaultValue = "cpu") String metric,

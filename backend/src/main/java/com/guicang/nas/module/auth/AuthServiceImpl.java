@@ -39,6 +39,12 @@ public class AuthServiceImpl implements AuthService {
     this.systemAccountProvisioner = systemAccountProvisioner;
   }
 
+  /**
+   * PAM 校验并签发 JWT；失败抛业务异常（code=401）。
+   *
+   * @param request 登录请求（用户名/密码）
+   * @return 登录响应（含 JWT 与当前用户信息）
+   */
   @Override
   @Audit(action = "login", resource = "#request.username()")
   public LoginResponse login(LoginRequest request) {
@@ -60,6 +66,11 @@ public class AuthServiceImpl implements AuthService {
             request.username(), result.uid(), result.home(), result.shell(), authorities));
   }
 
+  /**
+   * 当前登录用户信息（从 SecurityContext 读取）。
+   *
+   * @return 当前用户信息（用户名/UID/角色权限）
+   */
   @Override
   public CurrentUserInfo me() {
     Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
@@ -72,11 +83,18 @@ public class AuthServiceImpl implements AuthService {
     return new CurrentUserInfo(user.username(), user.uid(), null, null, roles);
   }
 
+  /** 登出（客户端丢弃令牌；服务端黑名单待 Redis 接入后实现）。 */
   @Override
   public void logout() {
     // 客户端丢弃令牌即可；服务端黑名单待 Redis 接入后实现（Step 6/8）
   }
 
+  /**
+   * 修改本人密码（校验旧密码，同步 Linux + Samba）。
+   *
+   * @param oldPassword 旧密码
+   * @param newPassword 新密码
+   */
   @Override
   @Audit(action = "auth.password")
   public void changePassword(String oldPassword, String newPassword) {

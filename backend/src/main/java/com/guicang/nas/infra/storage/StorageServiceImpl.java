@@ -28,6 +28,12 @@ public class StorageServiceImpl implements StorageService {
     this.storageRoot = Path.of(storageRoot).toAbsolutePath().normalize();
   }
 
+  /**
+   * 目录列表（按名称排序，目录在前）。
+   *
+   * @param relativePath 存储根下相对路径
+   * @return 目录下的文件条目列表
+   */
   @Override
   public List<FileEntry> list(String relativePath) {
     Path dir = PathUtils.resolve(storageRoot, relativePath);
@@ -45,6 +51,11 @@ public class StorageServiceImpl implements StorageService {
     }
   }
 
+  /**
+   * 新建目录（含多级）。
+   *
+   * @param relativePath 要创建的目录相对路径
+   */
   @Override
   public void mkdir(String relativePath) {
     Path target = PathUtils.resolve(storageRoot, relativePath);
@@ -59,6 +70,12 @@ public class StorageServiceImpl implements StorageService {
     }
   }
 
+  /**
+   * 重命名/移动目录项。
+   *
+   * @param relativePath 原相对路径
+   * @param newName 新名称
+   */
   @Override
   public void rename(String relativePath, String newName) {
     Path source = PathUtils.resolve(storageRoot, relativePath);
@@ -75,6 +92,12 @@ public class StorageServiceImpl implements StorageService {
     }
   }
 
+  /**
+   * 移动到目标路径。
+   *
+   * @param relativePath 源相对路径
+   * @param targetPath 目标目录相对路径
+   */
   @Override
   public void move(String relativePath, String targetPath) {
     Path source = PathUtils.resolve(storageRoot, relativePath);
@@ -95,6 +118,12 @@ public class StorageServiceImpl implements StorageService {
     }
   }
 
+  /**
+   * 移动到指定完整目标路径（同卷原子改名；用于回收站迁移/恢复）。
+   *
+   * @param sourceRelativePath 源相对路径
+   * @param targetRelativePath 目标完整相对路径
+   */
   @Override
   public void moveTo(String sourceRelativePath, String targetRelativePath) {
     Path source = PathUtils.resolve(storageRoot, sourceRelativePath);
@@ -122,6 +151,12 @@ public class StorageServiceImpl implements StorageService {
     }
   }
 
+  /**
+   * 删除目录项（目录须为空或递归删除）。
+   *
+   * @param relativePath 相对路径
+   * @param recursive 是否递归删除
+   */
   @Override
   public void delete(String relativePath, boolean recursive) {
     Path target = PathUtils.resolve(storageRoot, relativePath);
@@ -150,6 +185,13 @@ public class StorageServiceImpl implements StorageService {
     }
   }
 
+  /**
+   * 流式上传：先写同卷临时文件 {@code <root>/.guicang-tmp/<uuid>.part}，完成后原子改名到目标。
+   *
+   * @param targetRelativePath 目标文件相对路径（含文件名）
+   * @param inputStream 内容流
+   * @param size 内容字节数（用于校验与进度）
+   */
   @Override
   public void upload(String targetRelativePath, InputStream inputStream, long size) {
     Path target = PathUtils.resolve(storageRoot, targetRelativePath);
@@ -174,6 +216,12 @@ public class StorageServiceImpl implements StorageService {
     }
   }
 
+  /**
+   * 文本写入（md/txt 保存）：同卷临时文件 + 原子改名，允许覆盖已存在文件。
+   *
+   * @param relativePath 目标相对路径
+   * @param content 文本内容
+   */
   @Override
   public void writeText(String relativePath, String content) {
     Path target = PathUtils.resolve(storageRoot, relativePath);
@@ -195,6 +243,13 @@ public class StorageServiceImpl implements StorageService {
     }
   }
 
+  /**
+   * 读取文本文件内容（超过 maxBytes 拒绝，防内存放大）。
+   *
+   * @param relativePath 文件相对路径
+   * @param maxBytes 最大允许字节数
+   * @return 文本内容
+   */
   @Override
   public String readText(String relativePath, long maxBytes) {
     Path file = resolveFile(relativePath);
@@ -209,6 +264,12 @@ public class StorageServiceImpl implements StorageService {
     }
   }
 
+  /**
+   * 解析并校验文件相对路径，返回绝对路径（用于下载/预览流式读取）。
+   *
+   * @param relativePath 文件相对路径
+   * @return 文件绝对路径
+   */
   @Override
   public Path resolveFile(String relativePath) {
     Path file = PathUtils.resolve(storageRoot, relativePath);
@@ -219,6 +280,11 @@ public class StorageServiceImpl implements StorageService {
     return file;
   }
 
+  /**
+   * 存储根绝对路径。
+   *
+   * @return 存储根路径
+   */
   @Override
   public Path root() {
     return storageRoot;

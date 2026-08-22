@@ -18,7 +18,11 @@ public class DashboardController {
     this.dashboardService = dashboardService;
   }
 
-  /** 大屏聚合数据。 */
+  /**
+   * 大屏聚合数据。
+   *
+   * @return 大屏聚合数据
+   */
   @GetMapping("/summary")
   public Result<DashboardSummary> summary() {
     return Result.ok(dashboardService.summary());

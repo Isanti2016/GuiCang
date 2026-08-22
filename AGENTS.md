@@ -19,6 +19,12 @@ GuiCang（归藏）家庭 NAS 管理系统。
 - Controller 不得直接访问 Mapper；层间只传 DTO；实体只用于承载查询结果。
 - 统一返回 Result<T>；全局异常 @RestControllerAdvice；入参校验用 Bean Validation。
 - 目录按业务模块聚合（module/<功能> 内含 Controller/Service/Mapper），跨模块公共能力放 common/ 与 infra/；不把各层平铺全局。
+- Controller 不得包含 private 业务方法/内部类（响应组装下沉独立组件如 FileStreamResponder）。
+
+## 后端注释（硬性）
+- 所有公开 API（Controller 方法、Service 接口与实现类方法）用标准多行 Javadoc：`/** 摘要。` + `@param`（每个参数）+ `@return`（非 void）。
+- ServiceImpl 的 @Override 方法也必须有完整 Javadoc，不允许只依赖接口注释。
+- 新增/修改代码必须同步补注释。
 
 ## 后端命名与风格
 - 类 PascalCase、方法/字段 camelCase、常量 UPPER_SNAKE_CASE。
