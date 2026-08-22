@@ -245,7 +245,7 @@ const actionLabel = (action: string): string => {
 
 <template>
   <div class="dashboard">
-    <el-row :gutter="16">
+    <el-row :gutter="12">
       <el-col :span="6">
         <el-card shadow="never" class="stat-card">
           <div class="stat-card__icon stat-card__icon--disk">
@@ -314,14 +314,14 @@ const actionLabel = (action: string): string => {
       </el-col>
     </el-row>
 
-    <el-row :gutter="16" class="dashboard__charts">
+    <el-row :gutter="12" class="dashboard__charts">
       <el-col :span="16">
         <el-card shadow="never" class="chart-card">
           <template #header>
             <span class="chart-card__title">CPU 使用率趋势</span>
             <span class="chart-card__sub">30s 采样 · 近 2 小时</span>
           </template>
-          <div ref="trendRef" class="dashboard__chart dashboard__chart--wide" />
+          <div ref="trendRef" class="dashboard__chart" />
         </el-card>
       </el-col>
       <el-col :span="8">
@@ -330,19 +330,19 @@ const actionLabel = (action: string): string => {
             <span class="chart-card__title">磁盘占用</span>
             <span class="chart-card__sub">已用 / 可用</span>
           </template>
-          <div ref="diskRef" class="dashboard__chart dashboard__chart--tall" />
+          <div ref="diskRef" class="dashboard__chart" />
         </el-card>
       </el-col>
     </el-row>
 
-    <el-row :gutter="16" class="dashboard__charts">
+    <el-row :gutter="12" class="dashboard__charts">
       <el-col :span="8">
         <el-card shadow="never" class="chart-card">
           <template #header>
             <span class="chart-card__title">文件类型分布</span>
             <span class="chart-card__sub">图片 / 视频 / 文档</span>
           </template>
-          <div ref="fileTypeRef" class="dashboard__chart dashboard__chart--tall" />
+          <div ref="fileTypeRef" class="dashboard__chart" />
         </el-card>
       </el-col>
       <el-col :span="16">
@@ -351,7 +351,7 @@ const actionLabel = (action: string): string => {
             <span class="chart-card__title">用户存储占用</span>
             <span class="chart-card__sub">按用户聚合（前 10）</span>
           </template>
-          <div ref="userStorageRef" class="dashboard__chart dashboard__chart--wide" />
+          <div ref="userStorageRef" class="dashboard__chart" />
         </el-card>
       </el-col>
     </el-row>
@@ -361,13 +361,13 @@ const actionLabel = (action: string): string => {
         <span class="chart-card__title">最近操作</span>
         <span class="chart-card__sub">实时审计动态</span>
       </template>
-      <el-table :data="recentOperations" size="small">
-        <el-table-column prop="username" label="用户" width="140" />
-        <el-table-column label="操作" width="140">
+      <el-table :data="recentOperations" size="small" max-height="100%">
+        <el-table-column prop="username" label="用户" width="120" />
+        <el-table-column label="操作" width="120">
           <template #default="{ row }">{{ actionLabel(row.action) }}</template>
         </el-table-column>
         <el-table-column prop="resource" label="对象" show-overflow-tooltip />
-        <el-table-column prop="result" label="结果" width="90">
+        <el-table-column prop="result" label="结果" width="80">
           <template #default="{ row }">
             <el-tag
               :type="row.result === 'success' ? 'success' : 'danger'"
@@ -377,7 +377,7 @@ const actionLabel = (action: string): string => {
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="时间" width="180">
+        <el-table-column label="时间" width="170">
           <template #default="{ row }">
             {{
               row.createdAt
@@ -394,11 +394,18 @@ const actionLabel = (action: string): string => {
 </template>
 
 <style scoped>
+.dashboard {
+  display: flex;
+  flex-direction: column;
+  height: calc(100vh - 92px);
+  overflow: hidden;
+}
+
 .stat-card {
   border: 1px solid rgba(126, 210, 255, 0.18);
   background: linear-gradient(160deg, rgba(8, 26, 54, 0.72), rgba(4, 16, 38, 0.78));
   backdrop-filter: blur(10px);
-  border-radius: 14px;
+  border-radius: 12px;
   overflow: hidden;
   transition:
     transform 0.25s ease,
@@ -407,16 +414,16 @@ const actionLabel = (action: string): string => {
 }
 
 .stat-card:hover {
-  transform: translateY(-3px);
+  transform: translateY(-2px);
   border-color: rgba(212, 175, 55, 0.5);
-  box-shadow: 0 10px 30px rgba(2, 10, 26, 0.6);
+  box-shadow: 0 8px 24px rgba(2, 10, 26, 0.6);
 }
 
 .stat-card :deep(.el-card__body) {
   display: flex;
   align-items: center;
-  gap: 14px;
-  padding: 18px 20px;
+  gap: 12px;
+  padding: 12px 16px;
 }
 
 .stat-card__icon {
@@ -424,10 +431,10 @@ const actionLabel = (action: string): string => {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 52px;
-  height: 52px;
-  border-radius: 12px;
-  font-size: 26px;
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  font-size: 22px;
   color: #bfe9ff;
   border: 1px solid rgba(126, 210, 255, 0.25);
   background: rgba(110, 200, 255, 0.08);
@@ -459,36 +466,38 @@ const actionLabel = (action: string): string => {
 
 .stat-card__label {
   color: rgba(159, 198, 234, 0.8);
-  font-size: 12px;
+  font-size: 11px;
   letter-spacing: 1px;
 }
 
 .stat-card__value {
-  font-size: 24px;
+  font-size: 21px;
   font-weight: 600;
-  margin: 4px 0 2px;
+  margin: 2px 0 1px;
   color: #eaf6ff;
   font-variant-numeric: tabular-nums;
+  line-height: 1.2;
 }
 
 .stat-card__extra {
   color: rgba(159, 198, 234, 0.65);
-  font-size: 12px;
+  font-size: 11px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
 .dashboard__charts {
-  margin: 16px 0 0;
+  margin: 10px 0 0;
+  flex-shrink: 0;
 }
 
 .chart-card {
   border: 1px solid rgba(126, 210, 255, 0.18);
   background: linear-gradient(160deg, rgba(8, 26, 54, 0.72), rgba(4, 16, 38, 0.78));
   backdrop-filter: blur(10px);
-  border-radius: 14px;
-  box-shadow: 0 10px 40px rgba(2, 10, 26, 0.55);
+  border-radius: 12px;
+  box-shadow: 0 8px 32px rgba(2, 10, 26, 0.55);
 }
 
 .chart-card :deep(.el-card__header) {
@@ -496,35 +505,38 @@ const actionLabel = (action: string): string => {
   align-items: baseline;
   justify-content: space-between;
   border-bottom: 1px solid rgba(212, 175, 55, 0.22);
-  padding: 12px 18px;
+  padding: 8px 16px;
 }
 
 .chart-card__title {
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 600;
   color: #eaf6ff;
   letter-spacing: 1px;
 }
 
 .chart-card__sub {
-  font-size: 12px;
+  font-size: 11px;
   color: rgba(159, 198, 234, 0.6);
 }
 
 .dashboard__chart {
-  height: 280px;
-}
-
-.dashboard__chart--wide {
-  height: 320px;
-}
-
-.dashboard__chart--tall {
-  height: 320px;
+  height: 172px;
 }
 
 .dashboard__ops {
-  margin-top: 16px;
+  margin-top: 10px;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.dashboard__ops :deep(.el-card__body) {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  padding: 8px 12px;
 }
 
 .dashboard__ops :deep(.el-table) {

@@ -92,12 +92,20 @@ onMounted(() => {
           />
         </el-form-item>
         <el-form-item label="动作">
-          <el-input
+          <el-select
             v-model="filters.action"
-            placeholder="如 file.upload"
             clearable
-            style="width: 160px"
-          />
+            filterable
+            placeholder="全部动作"
+            style="width: 200px"
+          >
+            <el-option
+              v-for="(label, code) in actionLabels"
+              :key="code"
+              :label="`${label}（${code}）`"
+              :value="code"
+            />
+          </el-select>
         </el-form-item>
         <el-form-item label="结果">
           <el-select

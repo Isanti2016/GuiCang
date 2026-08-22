@@ -57,32 +57,39 @@ public class LocalMetricsCollector implements MetricsCollector {
     }
   }
 
-  /** 1 秒增量采样 CPU 使用率，返回千分比（0-1000），除以 10 得百分比。 */
-  private long[] readCpu() throws IOException {
-    long[] first = readCpuStat();
-    try {
-      Thread.sleep(1000);
-    } catch (InterruptedException e) {
-      Thread.currentThread().interrupt();
-      return new long[] {0, 0};
+  /** 上次 CPU 读数（idle, total），用于无阻塞增量计算；首次采样前为 null。 */
+  private long[] lastCpuStat;
+
+  /** 增量采样 CPU 使用率（千分比 0-1000，除以 10 得百分比）：基于上次采样读数做差值， 返回两次采样间隔内的平均使用率；首次采样无基线返回 0。无 sleep、不阻塞。 */
+  private long[] readCpu() {
+    long[] current = readCpuStat();
+    long[] result = {0L, 0L};
+    if (lastCpuStat != null) {
+      long idleDelta = current[0] - lastCpuStat[0];
+      long totalDelta = current[1] - lastCpuStat[1];
+      long cpu =
+          totalDelta > 0 && idleDelta >= 0 ? (totalDelta - idleDelta) * 1000 / totalDelta : 0;
+      result[0] = cpu;
     }
-    long[] second = readCpuStat();
-    long idleDelta = second[0] - first[0];
-    long totalDelta = second[1] - first[1];
-    long cpu = totalDelta > 0 ? (totalDelta - idleDelta) * 1000 / totalDelta : 0;
-    return new long[] {cpu, 0};
+    lastCpuStat = current;
+    return result;
   }
 
   /** 读取 /proc/stat 第一行，返回 {idle+iowait, total}。 */
-  private long[] readCpuStat() throws IOException {
-    String line = Files.readAllLines(Path.of("/proc/stat")).get(0);
-    String[] parts = line.trim().split("\\s+");
-    long total = 0;
-    for (int i = 1; i < parts.length; i++) {
-      total += Long.parseLong(parts[i]);
+  private long[] readCpuStat() {
+    try {
+      String line = Files.readAllLines(Path.of("/proc/stat")).get(0);
+      String[] parts = line.trim().split("\\s+");
+      long total = 0;
+      for (int i = 1; i < parts.length; i++) {
+        total += Long.parseLong(parts[i]);
+      }
+      long idle = Long.parseLong(parts[4]) + Long.parseLong(parts[5]);
+      return new long[] {idle, total};
+    } catch (IOException | IndexOutOfBoundsException | NumberFormatException e) {
+      log.warn("读取 /proc/stat 失败: {}", e.getMessage());
+      return new long[] {0L, 0L};
     }
-    long idle = Long.parseLong(parts[4]) + Long.parseLong(parts[5]);
-    return new long[] {idle, total};
   }
 
   private long[] readMemInfo() throws IOException {
