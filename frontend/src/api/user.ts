@@ -24,6 +24,7 @@ export interface RoleVO {
   name: string;
   description: string | null;
   permissionCodes: string[];
+  userCount: number;
 }
 
 /** 权限视图（与后端 PermissionVO 对应）。 */

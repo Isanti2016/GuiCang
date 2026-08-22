@@ -18,6 +18,7 @@ const menus = computed(() => {
   const items = [
     { path: "/dashboard", title: "监控大屏", icon: "Odometer" },
     { path: "/files", title: "文件管理", icon: "Folder" },
+    { path: "/monitor", title: "监控详情", icon: "DataLine", adminOnly: true },
     { path: "/gallery", title: "相册", icon: "Picture" },
     { path: "/trash", title: "回收站", icon: "Delete" },
     { path: "/admin/users", title: "用户管理", icon: "User", adminOnly: true },

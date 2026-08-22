@@ -42,6 +42,12 @@ const routes: RouteRecordRaw[] = [
         meta: { title: "回收站" },
       },
       {
+        path: "monitor",
+        name: "monitor",
+        component: () => import("@/views/MonitorView.vue"),
+        meta: { title: "监控详情", adminOnly: true },
+      },
+      {
         path: "admin/users",
         name: "admin-users",
         component: () => import("@/views/UserView.vue"),

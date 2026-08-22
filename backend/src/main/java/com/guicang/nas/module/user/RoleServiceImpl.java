@@ -38,6 +38,11 @@ public class RoleServiceImpl implements RoleService {
    *
    * @return 角色列表
    */
+  /**
+   * 角色列表（含授权权限编码与绑定用户数）。
+   *
+   * @return 全部角色视图
+   */
   @Override
   public List<RoleVO> listRoles() {
     return sysRoleMapper.selectList(null).stream().map(this::toVO).toList();
@@ -138,6 +143,12 @@ public class RoleServiceImpl implements RoleService {
             });
   }
 
+  /**
+   * 组装角色视图（含授权权限编码与绑定用户数）。
+   *
+   * @param role 角色实体
+   * @return 角色视图
+   */
   private RoleVO toVO(SysRole role) {
     List<String> permissionCodes =
         sysRolePermissionMapper
@@ -149,7 +160,15 @@ public class RoleServiceImpl implements RoleService {
             .filter(p -> p != null)
             .map(SysPermission::getCode)
             .collect(Collectors.toList());
+    long userCount =
+        sysUserMapper.selectCount(
+            new LambdaQueryWrapper<SysUser>().eq(SysUser::getRoleId, role.getId()));
     return new RoleVO(
-        role.getId(), role.getCode(), role.getName(), role.getDescription(), permissionCodes);
+        role.getId(),
+        role.getCode(),
+        role.getName(),
+        role.getDescription(),
+        permissionCodes,
+        userCount);
   }
 }
