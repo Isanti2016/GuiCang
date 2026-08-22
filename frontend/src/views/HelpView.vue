@@ -166,8 +166,14 @@ const sections: Section[] = [
 
 <style scoped>
 .help-view__card {
+  /* 兼容路由页面与抽屉两种容器：页面内限宽居中，抽屉内撑满 */
   max-width: 860px;
+  width: 100%;
   margin: 0 auto;
+  border: 1px solid rgba(126, 210, 255, 0.18);
+  background: linear-gradient(160deg, rgba(8, 26, 54, 0.85), rgba(4, 16, 38, 0.9));
+  backdrop-filter: blur(10px);
+  border-radius: 14px;
 }
 
 .help-view__header {
@@ -184,7 +190,7 @@ const sections: Section[] = [
 
 .help-view__desc {
   margin: 0;
-  color: var(--el-text-color-secondary);
+  color: rgba(159, 198, 234, 0.75);
   font-size: 13px;
 }
 
@@ -213,5 +219,15 @@ const sections: Section[] = [
   font-size: 13px;
   line-height: 1.8;
   color: var(--el-text-color-regular);
+}
+
+.help-view :deep(.el-collapse) {
+  --el-collapse-border-color: rgba(126, 210, 255, 0.16);
+  --el-collapse-header-text-color: #bfe9ff;
+  --el-collapse-content-text-color: #cfe7f8;
+  --el-collapse-header-bg-color: transparent;
+  --el-collapse-content-bg-color: transparent;
+  border-top: none;
+  border-bottom: none;
 }
 </style>

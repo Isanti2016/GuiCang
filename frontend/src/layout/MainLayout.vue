@@ -3,6 +3,7 @@ import { computed, onMounted, reactive, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { ElMessage, type FormInstance, type FormRules } from "element-plus";
 import TechBackground from "@/components/TechBackground.vue";
+import HelpView from "@/views/HelpView.vue";
 import { useAuthStore } from "@/stores/auth";
 import { changePassword } from "@/api/auth";
 
@@ -102,11 +103,14 @@ async function handleCommand(command: string): Promise<void> {
   if (command === "logout") {
     await handleLogout();
   } else if (command === "help") {
-    await router.push("/help");
+    helpOpen.value = true;
   } else if (command === "password") {
     openPasswordDialog();
   }
 }
+
+/** 使用手册抽屉开关。 */
+const helpOpen = ref(false);
 
 onMounted(() => {
   // 已登录但未加载用户信息时补拉（刷新页面后）
@@ -212,6 +216,16 @@ onMounted(() => {
         </el-button>
       </template>
     </el-dialog>
+
+    <el-drawer
+      v-model="helpOpen"
+      title="使用手册"
+      size="min(860px, 92vw)"
+      append-to-body
+      class="main-layout__help-drawer"
+    >
+      <HelpView />
+    </el-drawer>
   </div>
 </template>
 
@@ -327,5 +341,30 @@ onMounted(() => {
 
 .main-layout__pwd-dialog :deep(.el-dialog__title) {
   color: #eaf6ff;
+}
+
+.main-layout__help-drawer {
+  --el-drawer-bg-color: rgba(5, 16, 36, 0.96);
+}
+
+.main-layout__help-drawer :deep(.el-drawer__header) {
+  color: #eaf6ff;
+  margin-bottom: 8px;
+  border-bottom: 1px solid rgba(212, 175, 55, 0.25);
+  padding-bottom: 14px;
+}
+
+.main-layout__help-drawer :deep(.el-drawer__title) {
+  color: #eaf6ff;
+  font-size: 16px;
+  letter-spacing: 1px;
+}
+
+.main-layout__help-drawer :deep(.el-drawer__close-btn) {
+  color: #bfe9ff;
+}
+
+.main-layout__help-drawer :deep(.el-drawer__close-btn:hover) {
+  color: #d4af37;
 }
 </style>
