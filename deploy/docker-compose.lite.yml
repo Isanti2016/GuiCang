@@ -1,0 +1,60 @@
+# =============================================================================
+# GuiCang 轻量部署编排（一键启动脚本 docker-start.sh 默认使用）
+# 拓扑：nginx(:80) → backend(:8080 内部)
+# 特点：
+#   - 无 ELK/Redis 重依赖，一条命令从零启动（内存占用小，适合家庭 NAS）
+#   - 认证 local 验证器：只读挂载宿主机 /etc/shadow、/etc/passwd、/etc/group 与
+#     scripts/（guicang-pam-verify.py 纯 ctypes 调 libpam），登录验证宿主机系统账号，
+#     与 Samba 账号一致、开箱即用
+#   - 完整版（含 ELK 日志链路）用 deploy/docker-compose.yml + --full 子命令
+# 数据卷：guicang-data（SQLite/缩略图）、guicang-logs（日志）
+# bind：宿主机存储根（默认 /home/wb/nas，可改 .env 的 GUICANG_STORAGE_ROOT）
+#
+# 使用：bash scripts/docker-start.sh
+# =============================================================================
+name: guicang-lite
+
+services:
+  backend:
+    build: ../backend
+    image: guicang-backend:latest
+    container_name: guicang-backend
+    env_file: .env
+    environment:
+      GUICANG_DATA_DIR: /data
+      GUICANG_STORAGE_ROOT: /nas
+      GUICANG_THUMBS_DIR: /data/thumbs
+      GUICANG_AUTH_VERIFIER: local
+      GUICANG_PAM_SCRIPT: /scripts/guicang-pam-verify.py
+      GUICANG_JWT_SECRET: ${GUICANG_JWT_SECRET}
+      # 容器内管理员账号（entrypoint 创建，隔离于宿主机凭据）
+      GUICANG_CONTAINER_ADMIN_USER: ${GUICANG_CONTAINER_ADMIN_USER:-admin}
+      GUICANG_CONTAINER_ADMIN_PASSWORD: ${GUICANG_CONTAINER_ADMIN_PASSWORD:-guicang123456}
+      SPRING_PROFILES_ACTIVE: sqlite
+    volumes:
+      - guicang-data:/data
+      - guicang-logs:/var/log/guicang
+      - ${GUICANG_STORAGE_ROOT}:/nas
+      - ../scripts:/scripts:ro
+    networks: [guicang-lite-net]
+    restart: unless-stopped
+
+  nginx:
+    image: nginx:alpine
+    container_name: guicang-nginx
+    ports:
+      - "${GUICANG_HTTP_PORT:-80}:80"
+    volumes:
+      - ./nginx/guicang.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - backend
+    networks: [guicang-lite-net]
+    restart: unless-stopped
+
+volumes:
+  guicang-data:
+  guicang-logs:
+
+networks:
+  guicang-lite-net:
+    name: guicang-lite-net

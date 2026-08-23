@@ -55,6 +55,31 @@ cd frontend && pnpm test            # 11 个前端测试（Vitest）
 
 ## 部署
 
+### 方式一：Docker 一键启动（推荐，轻量）
+
+无需宿主机特权前置，容器内自建隔离管理员账号，开箱即用：
+
+```bash
+bash scripts/docker-start.sh          # 一键：生成 .env → 构建镜像 → 启动 → 健康检查
+# 访问 http://<主机IP>:80/ （默认端口，.env 的 GUICANG_HTTP_PORT 可改）
+# 登录：admin / 密码见 deploy/.env 的 GUICANG_CONTAINER_ADMIN_PASSWORD
+
+bash scripts/docker-start.sh stop     # 停止（保留数据卷）
+bash scripts/docker-start.sh restart  # 重启
+bash scripts/docker-start.sh status   # 状态
+bash scripts/docker-start.sh logs     # 日志
+bash scripts/docker-start.sh down     # 停止并移除容器/网络（保留数据卷）
+bash scripts/docker-start.sh full     # 完整模式：宿主机 helper 认证 + ELK 日志链路
+```
+
+说明：
+- 轻量模式拓扑为 `nginx(:80) → backend(:8080 内部)`，无 Redis/ELK 依赖，内存占用小。
+- 认证为**容器内系统账号**（entrypoint 自动创建 admin），与宿主机凭据完全隔离。
+- 存储根默认 `/home/wb/nas`（bind 挂载），可用 `.env` 的 `GUICANG_STORAGE_ROOT` 修改。
+- 生产环境（需要宿主机系统账号/Samba 一致认证 + ELK 日志）请用 `docker-start.sh full`。
+
+### 方式二：完整部署（生产，宿主机账号体系 + ELK）
+
 ```bash
 # 1. 宿主特权边界（需确认，见 HANDOFF）
 sudo ./scripts/install-helper.sh

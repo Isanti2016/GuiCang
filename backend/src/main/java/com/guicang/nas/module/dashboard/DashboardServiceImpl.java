@@ -109,31 +109,6 @@ public class DashboardServiceImpl implements DashboardService {
         .toList();
   }
 
-  /** 用户存储占用：按 personal/<user>/ 前缀从 file_index 聚合大小与数量（仅取所需列，避免全行传输）。 */
-  private List<UserStorageUsage> userStorageUsage() {
-    java.util.Map<String, long[]> usage = new java.util.TreeMap<>();
-    fileIndexMapper
-        .selectList(
-            new LambdaQueryWrapper<FileIndex>()
-                .select(FileIndex::getPath, FileIndex::getSize)
-                .likeRight(FileIndex::getPath, "personal/"))
-        .forEach(
-            idx -> {
-              String rel = idx.getPath();
-              int slash = rel.indexOf('/', "personal/".length());
-              if (slash < 0) {
-                return;
-              }
-              String user = rel.substring("personal/".length(), slash);
-              long[] acc = usage.computeIfAbsent(user, k -> new long[2]);
-              acc[0] += idx.getSize() == null ? 0 : idx.getSize();
-              acc[1] += 1;
-            });
-    return usage.entrySet().stream()
-        .map(e -> new UserStorageUsage(e.getKey(), e.getValue()[0], e.getValue()[1]))
-        .toList();
-  }
-
   /**
    * 按类型统计文件数量（SQL 侧 GROUP BY 聚合，避免全表拉取到内存）。
    *
