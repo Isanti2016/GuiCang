@@ -110,7 +110,7 @@ public class DashboardServiceImpl implements DashboardService {
   }
 
   /**
-   * 按类型统计文件数量（SQL 侧 GROUP BY 聚合，避免全表拉取到内存）。
+   * 按类型统计文件数量（SQL 侧 GROUP BY + COUNT(*) 聚合，避免全表拉取到内存）。
    *
    * @return 类型码 → 数量
    */
@@ -120,11 +120,17 @@ public class DashboardServiceImpl implements DashboardService {
             .entrySet().stream()
                 .collect(java.util.stream.Collectors.toMap(e -> e.getKey().code, e -> 0L));
     fileIndexMapper
-        .selectList(
-            new LambdaQueryWrapper<FileIndex>()
-                .select(FileIndex::getKind)
-                .groupBy(FileIndex::getKind))
-        .forEach(idx -> counts.merge(idx.getKind(), 1L, Long::sum));
+        .selectMaps(
+            new com.baomidou.mybatisplus.core.conditions.query.QueryWrapper<FileIndex>()
+                .select("kind", "COUNT(*) AS cnt")
+                .groupBy("kind"))
+        .forEach(
+            row -> {
+              String kind = String.valueOf(row.get("kind"));
+              Object cnt = row.get("cnt");
+              long value = cnt instanceof Number n ? n.longValue() : 0L;
+              counts.merge(kind, value, Long::sum);
+            });
     return counts;
   }
 
