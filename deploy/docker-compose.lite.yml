@@ -22,6 +22,7 @@ services:
     env_file: .env
     environment:
       GUICANG_DATA_DIR: /data
+      GUICANG_LOG_DIR: /var/log/guicang
       GUICANG_STORAGE_ROOT: /nas
       GUICANG_THUMBS_DIR: /data/thumbs
       GUICANG_AUTH_VERIFIER: local
