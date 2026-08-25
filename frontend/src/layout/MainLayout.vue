@@ -32,6 +32,7 @@ const menus = computed(() => {
     { path: "/sync", title: "同步任务", icon: "Clock", adminOnly: true },
     { path: "/audit", title: "操作记录", icon: "List", adminOnly: true },
     { path: "/logs", title: "系统日志", icon: "Document", adminOnly: true },
+    { path: "/settings", title: "系统设置", icon: "Setting", adminOnly: true },
   ];
   return items.filter((item) => !item.adminOnly || isAdmin.value);
 });

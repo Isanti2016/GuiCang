@@ -16,6 +16,8 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Set;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -25,6 +27,8 @@ import org.springframework.web.multipart.MultipartFile;
 /** 文件管理服务实现：目录操作与上传下载，每次操作校验登录与目录级权限，并审计留痕。 */
 @Service
 public class FileServiceImpl implements FileService {
+
+  private static final Logger log = LoggerFactory.getLogger(FileServiceImpl.class);
 
   private final StorageService storageService;
   private final DirPermissionService dirPermissionService;
@@ -143,6 +147,51 @@ public class FileServiceImpl implements FileService {
     item.setDeletedAt(System.currentTimeMillis());
     trashItemMapper.insert(item);
     fileIndexService.remove(path);
+  }
+
+  /**
+   * 批量软删除文件/目录（移入回收站）。
+   *
+   * @param paths 相对路径列表
+   * @param recursive 是否递归删除目录
+   */
+  @Override
+  public void deleteBatch(List<String> paths, boolean recursive) {
+    for (String path : paths) {
+      delete(path, recursive);
+    }
+  }
+
+  /**
+   * 自动清空过期回收站条目（定时任务调用，无需登录）。
+   *
+   * @param days 保留天数；days=0 表示不清理
+   * @return 清理的条目数
+   */
+  @Override
+  public int purgeExpiredTrash(int days) {
+    if (days <= 0) {
+      return 0;
+    }
+    long threshold = System.currentTimeMillis() - days * 24L * 3600 * 1000;
+    List<TrashItem> expired =
+        trashItemMapper.selectList(
+            new LambdaQueryWrapper<TrashItem>()
+                .lt(TrashItem::getDeletedAt, threshold)
+                .isNotNull(TrashItem::getDeletedAt));
+    for (TrashItem item : expired) {
+      try {
+        storageService.delete(item.getTrashPath(), true);
+      } catch (Exception e) {
+        log.warn(
+            "自动清理回收站条目失败, id={}, path={}: {}", item.getId(), item.getTrashPath(), e.getMessage());
+      }
+      trashItemMapper.deleteById(item.getId());
+    }
+    if (!expired.isEmpty()) {
+      log.info("回收站自动清理完成，共 {} 条（保留 {} 天）", expired.size(), days);
+    }
+    return expired.size();
   }
 
   /**

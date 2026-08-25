@@ -114,3 +114,8 @@ export async function downloadFileAsBlob(path: string): Promise<void> {
     : path;
   saveBlob(blob, name);
 }
+
+/** 批量删除（软删除进回收站）。 */
+export function batchDelete(paths: string[], recursive = false): Promise<void> {
+  return post<void>("/files/batch-delete", { paths, recursive });
+}

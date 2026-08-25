@@ -1,6 +1,8 @@
 <script setup lang="ts">
+import { ElMessage, ElMessageBox } from "element-plus";
 import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import {
+  batchDelete,
   fetchMedia,
   streamUrl,
   thumbnailUrl,
@@ -10,6 +12,10 @@ import {
 const entries = ref<FileEntry[]>([]);
 const loading = ref(false);
 const filter = ref<"all" | "image" | "video">("all");
+
+/** 选择模式：开启后点击条目为勾选，关闭后点击打开灯箱。 */
+const selectionMode = ref(false);
+const selected = ref<Set<string>>(new Set());
 
 const filtered = computed(() =>
   filter.value === "all"
@@ -23,6 +29,65 @@ const imageCount = computed(
 const videoCount = computed(
   () => entries.value.filter((e) => e.kind === "video").length,
 );
+
+/** 当前可见列表中选中的条目。 */
+const selectedEntries = computed(() =>
+  filtered.value.filter((e) => selected.value.has(e.path)),
+);
+const allSelected = computed(
+  () =>
+    filtered.value.length > 0 &&
+    selectedEntries.value.length === filtered.value.length,
+);
+
+/** 切换选择模式（关闭时清空勾选）。 */
+function toggleSelectionMode(): void {
+  selectionMode.value = !selectionMode.value;
+  if (!selectionMode.value) {
+    selected.value = new Set();
+  }
+}
+
+/** 点击条目：选择模式下切换勾选，否则打开灯箱。 */
+function handleEntryClick(index: number, entry: FileEntry): void {
+  if (selectionMode.value) {
+    if (selected.value.has(entry.path)) selected.value.delete(entry.path);
+    else selected.value.add(entry.path);
+  } else {
+    openLightbox(index);
+  }
+}
+
+/** 全选/取消全选当前可见列表。 */
+function toggleSelectAll(): void {
+  if (allSelected.value) {
+    selected.value = new Set();
+  } else {
+    selected.value = new Set(filtered.value.map((e) => e.path));
+  }
+}
+
+/** 批量删除选中项（软删除进回收站，确认后执行）。 */
+async function handleBatchDelete(): Promise<void> {
+  if (selectedEntries.value.length === 0) return;
+  try {
+    await ElMessageBox.confirm(
+      `确认删除选中的 ${selectedEntries.value.length} 个文件？删除后可在回收站恢复。`,
+      "批量删除",
+      { type: "warning", confirmButtonText: "删除", cancelButtonText: "取消" },
+    );
+  } catch {
+    return;
+  }
+  try {
+    await batchDelete(selectedEntries.value.map((e) => e.path));
+    ElMessage.success("已删除");
+    selected.value = new Set();
+    await load();
+  } catch {
+    // 错误提示由拦截器处理
+  }
+}
 
 const lightboxOpen = ref(false);
 const lightboxIndex = ref(0);
@@ -96,16 +161,45 @@ onBeforeUnmount(() => {
               {{ imageCount }} 张图片 · {{ videoCount }} 个视频
             </span>
           </div>
-          <el-segmented
-            v-model="filter"
-            :options="[
-              { label: `全部（${entries.length}）`, value: 'all' },
-              { label: `图片（${imageCount}）`, value: 'image' },
-              { label: `视频（${videoCount}）`, value: 'video' },
-            ]"
-          />
+          <div class="gallery__header-actions">
+            <el-segmented
+              v-model="filter"
+              :options="[
+                { label: `全部（${entries.length}）`, value: 'all' },
+                { label: `图片（${imageCount}）`, value: 'image' },
+                { label: `视频（${videoCount}）`, value: 'video' },
+              ]"
+            />
+            <el-button
+              :type="selectionMode ? 'primary' : 'default'"
+              plain
+              @click="toggleSelectionMode"
+            >
+              {{ selectionMode ? "取消选择" : "选择" }}
+            </el-button>
+          </div>
         </div>
       </template>
+
+      <div v-if="selectionMode" class="gallery__select-bar">
+        <el-checkbox :model-value="allSelected" @change="toggleSelectAll">
+          全选当前
+        </el-checkbox>
+        <span class="gallery__select-count">
+          已选 {{ selectedEntries.length }} 项
+        </span>
+        <div class="gallery__select-actions">
+          <el-button
+            size="small"
+            type="danger"
+            :disabled="selectedEntries.length === 0"
+            @click="handleBatchDelete"
+          >
+            删除所选
+          </el-button>
+          <el-button size="small" @click="toggleSelectionMode">取消</el-button>
+        </div>
+      </div>
 
       <div v-loading="loading" class="gallery__body">
         <div v-if="filtered.length === 0 && !loading" class="gallery__empty">
@@ -116,8 +210,16 @@ onBeforeUnmount(() => {
             v-for="(entry, index) in filtered"
             :key="entry.path"
             class="gallery__item"
-            @click="openLightbox(index)"
+            :class="{ 'gallery__item--selected': selected.has(entry.path) }"
+            @click="handleEntryClick(index, entry)"
           >
+            <span
+              v-if="selectionMode"
+              class="gallery__item-check"
+              :class="{ 'gallery__item-check--on': selected.has(entry.path) }"
+            >
+              <el-icon v-if="selected.has(entry.path)"><Check /></el-icon>
+            </span>
             <img
               v-if="entry.kind === 'image'"
               :src="thumbnailUrl(entry.path)"
@@ -236,6 +338,64 @@ onBeforeUnmount(() => {
 
 .gallery__body {
   min-height: 260px;
+}
+
+.gallery__header-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.gallery__select-bar {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 8px 12px;
+  margin-bottom: 12px;
+  border: 1px solid rgba(212, 175, 55, 0.35);
+  border-radius: 10px;
+  background: rgba(212, 175, 55, 0.08);
+}
+
+.gallery__select-count {
+  font-size: 13px;
+  color: #d4af37;
+}
+
+.gallery__select-actions {
+  margin-left: auto;
+}
+
+.gallery__item {
+  cursor: pointer;
+}
+
+.gallery__item--selected {
+  border-color: rgba(212, 175, 55, 0.85);
+  box-shadow: 0 0 0 2px rgba(212, 175, 55, 0.35), 0 8px 26px rgba(2, 10, 26, 0.6);
+}
+
+.gallery__item-check {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.7);
+  background: rgba(3, 12, 28, 0.55);
+  color: transparent;
+  font-size: 14px;
+}
+
+.gallery__item-check--on {
+  background: #d4af37;
+  border-color: #d4af37;
+  color: #061228;
 }
 
 .gallery__empty {

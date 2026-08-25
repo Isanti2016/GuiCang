@@ -83,6 +83,12 @@ const routes: RouteRecordRaw[] = [
         component: () => import("@/views/LogView.vue"),
         meta: { title: "系统日志", adminOnly: true },
       },
+      {
+        path: "settings",
+        name: "settings",
+        component: () => import("@/views/SystemSettingsView.vue"),
+        meta: { title: "系统设置", adminOnly: true },
+      },
     ],
   },
   { path: "/:pathMatch(.*)*", redirect: "/dashboard" },

@@ -2,6 +2,7 @@ package com.guicang.nas.module.file;
 
 import com.guicang.nas.common.Result;
 import com.guicang.nas.infra.storage.FileEntry;
+import com.guicang.nas.module.file.dto.FileBatchDeleteRequest;
 import com.guicang.nas.module.file.dto.FileMoveRequest;
 import com.guicang.nas.module.file.dto.FilePathRequest;
 import com.guicang.nas.module.file.dto.FileRenameRequest;
@@ -112,6 +113,18 @@ public class FileController {
       @RequestParam @NotBlank String path,
       @RequestParam(defaultValue = "false") boolean recursive) {
     fileService.delete(path, recursive);
+    return Result.ok();
+  }
+
+  /**
+   * 批量删除（软删除进回收站）。
+   *
+   * @param request 批量删除请求体（路径列表 + 是否递归）
+   * @return 空结果
+   */
+  @PostMapping("/batch-delete")
+  public Result<Void> deleteBatch(@Valid @RequestBody FileBatchDeleteRequest request) {
+    fileService.deleteBatch(request.paths(), request.recursive());
     return Result.ok();
   }
 

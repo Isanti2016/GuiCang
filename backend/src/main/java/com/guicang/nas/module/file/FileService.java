@@ -35,6 +35,12 @@ public interface FileService {
   /** 清空回收站（管理员或本人）。 */
   void emptyTrash();
 
+  /** 自动清空过期回收站条目（定时任务调用，无需登录；days=0 表示不清理）。 */
+  int purgeExpiredTrash(int days);
+
+  /** 批量软删除文件/目录（移入回收站，需 WRITE 权限）。 */
+  void deleteBatch(List<String> paths, boolean recursive);
+
   /** 上传文件到目录（需 WRITE 权限；校验大小与扩展名；流式写盘 + 原子改名）。 */
   FileEntry upload(String dirPath, MultipartFile file);
 
