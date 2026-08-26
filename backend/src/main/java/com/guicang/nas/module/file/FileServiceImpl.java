@@ -444,6 +444,10 @@ public class FileServiceImpl implements FileService {
         continue;
       }
       if (entry.dir()) {
+        // 跳过回收站目录（相册不应展示已删除内容）
+        if (TRASH_DIR.equals(entry.name()) || entry.path().startsWith(TRASH_DIR + "/")) {
+          continue;
+        }
         collectMedia(entry.path(), depth + 1, out, username);
       } else if ("image".equals(entry.kind()) || "video".equals(entry.kind())) {
         out.add(entry);
