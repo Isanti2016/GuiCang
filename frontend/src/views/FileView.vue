@@ -5,6 +5,7 @@ import {
   ElMessageBox,
   type FormInstance,
   type FormRules,
+  type UploadUserFile,
 } from "element-plus";
 import MarkdownIt from "markdown-it";
 import hljs from "highlight.js";
@@ -112,32 +113,59 @@ function switchView(mode: "grid" | "list"): void {
 }
 
 // ============ 选择 ============
+/** 是否处于选择模式（选择模式下单击条目为勾选，否则为打开）。 */
+const selectionMode = ref(false);
+
 /** 勾选/取消勾选条目。 */
 function toggleSelect(entry: FileEntry): void {
   if (selected.value.has(entry.path)) selected.value.delete(entry.path);
   else selected.value.add(entry.path);
 }
 
-/** 清空勾选。 */
+/** 清空勾选并退出选择模式。 */
 function clearSelection(): void {
   selected.value = new Set();
+  selectionMode.value = false;
 }
 
-// ============ 条目交互 ============
-/** 单击条目（网格模式下切换勾选）。 */
-function handleEntryClick(entry: FileEntry): void {
-  if (viewMode.value === "grid") {
-    toggleSelect(entry);
+/** 切换选择模式（关闭时清空勾选）。 */
+function toggleSelectionMode(): void {
+  selectionMode.value = !selectionMode.value;
+  if (!selectionMode.value) {
+    selected.value = new Set();
   }
 }
 
-/** 双击条目：目录进入、可预览文件打开预览。 */
-function handleEntryDblClick(entry: FileEntry): void {
+// ============ 条目交互 ============
+/** 单击条目：选择模式下切换勾选；否则目录进入、可预览文件打开预览。 */
+function handleEntryClick(entry: FileEntry): void {
+  if (selectionMode.value) {
+    toggleSelect(entry);
+    return;
+  }
+  openEntry(entry);
+}
+
+/** 打开条目：目录进入、可预览文件预览、其余提示。 */
+function openEntry(entry: FileEntry): void {
   if (entry.dir) {
     void navigate(entry.path);
   } else if (canPreview(entry)) {
     void openPreview(entry);
+  } else {
+    ElMessage.info(`「${entry.name}」不支持内联预览，可下载查看`);
   }
+}
+
+/** 双击条目（兼容习惯，与单击一致）。 */
+function handleEntryDblClick(entry: FileEntry): void {
+  openEntry(entry);
+}
+
+/** 点击卡片勾选角标：仅切换勾选，不打开。 */
+function handleCheckClick(event: Event, entry: FileEntry): void {
+  event.stopPropagation();
+  toggleSelect(entry);
 }
 
 /** 格式化字节数为人类可读大小。 */
@@ -189,11 +217,11 @@ async function handleMkdir(): Promise<void> {
 
 // ============ 上传（拖拽 + 进度） ============
 const uploadDialog = ref(false);
-const uploadFiles = ref<File[]>([]);
+const uploadFiles = ref<UploadUserFile[]>([]);
 const uploadProgress = ref(0);
 const uploading = ref(false);
 
-/** 逐文件上传（带总体进度）。 */
+/** 逐文件上传（带总体进度）。el-upload 的 file-list 元素为 UploadUserFile，取 raw 原生 File。 */
 async function handleUpload(): Promise<void> {
   if (uploadFiles.value.length === 0) return;
   uploading.value = true;
@@ -201,7 +229,9 @@ async function handleUpload(): Promise<void> {
   let done = 0;
   const total = uploadFiles.value.length;
   try {
-    for (const file of uploadFiles.value) {
+    for (const item of uploadFiles.value) {
+      const file = item.raw ?? (item as unknown as File);
+      if (!file) continue;
       await uploadWithProgress(currentDir.value, file, (percent) => {
         uploadProgress.value = Math.round(
           ((done + percent / 100) / total) * 100,
@@ -209,7 +239,7 @@ async function handleUpload(): Promise<void> {
       });
       done += 1;
     }
-    ElMessage.success(`已上传 ${total} 个文件`);
+    ElMessage.success(`已上传 ${done} 个文件`);
     uploadDialog.value = false;
     uploadFiles.value = [];
     await loadList();
@@ -495,6 +525,14 @@ onMounted(() => {
           >
           <el-button
             size="small"
+            :type="selectionMode ? 'primary' : 'default'"
+            plain
+            @click="toggleSelectionMode"
+          >
+            <el-icon><Select /></el-icon>{{ selectionMode ? "完成" : "选择" }}
+          </el-button>
+          <el-button
+            size="small"
             type="primary"
             plain
             @click="mkdirDialog = true"
@@ -507,14 +545,40 @@ onMounted(() => {
         </div>
       </div>
 
-      <!-- 多选工具条 -->
+      <!-- 多选工具条（选择模式或有勾选时显示） -->
       <transition name="gc-fade">
-        <div v-if="selected.size > 0" class="file-manager__selectbar">
-          <span>已选 {{ selected.size }} 项</span>
-          <el-button size="small" type="danger" plain @click="handleBatchDelete"
-            >批量删除</el-button
-          >
-          <el-button size="small" @click="clearSelection">取消选择</el-button>
+        <div
+          v-if="selectionMode || selected.size > 0"
+          class="file-manager__selectbar"
+        >
+          <span>
+            已选 {{ selected.size }} 项
+            <el-button
+              link
+              size="small"
+              type="primary"
+              @click="
+                selected =
+                  new Set(
+                    list.filter((e) => !selected.has(e.path)).map((e) => e.path),
+                  )
+              "
+              >全选</el-button
+            >
+            <el-button
+              v-if="selectionMode"
+              link
+              size="small"
+              @click="toggleSelectionMode"
+              >退出选择</el-button
+            >
+          </span>
+          <div class="file-manager__selectbar-actions">
+            <el-button size="small" type="danger" plain @click="handleBatchDelete"
+              >批量删除</el-button
+            >
+            <el-button size="small" @click="clearSelection">取消选择</el-button>
+          </div>
         </div>
       </transition>
 
@@ -530,6 +594,15 @@ onMounted(() => {
             @click="handleEntryClick(entry)"
             @dblclick="handleEntryDblClick(entry)"
           >
+            <!-- 勾选角标：hover 或选择模式可见，点击仅勾选不打开 -->
+            <span
+              v-if="selectionMode || selected.has(entry.path)"
+              class="file-manager__card-check"
+              :class="{ 'file-manager__card-check--on': selected.has(entry.path) }"
+              @click="handleCheckClick($event, entry)"
+            >
+              <el-icon v-if="selected.has(entry.path)"><Check /></el-icon>
+            </span>
             <div class="file-manager__card-media">
               <img
                 v-if="['image', 'video'].includes(entry.kind)"
@@ -602,7 +675,12 @@ onMounted(() => {
           :data="list"
           size="small"
           class="file-manager__table"
-          @row-dblclick="handleEntryDblClick"
+          @row-click="
+            (_row: FileEntry, column: { type?: string }) => {
+              // 点 selection 勾选列时不打开条目
+              if (column.type !== 'selection') openEntry(_row)
+            }
+          "
           @selection-change="
             (rows: FileEntry[]) => (selected = new Set(rows.map((r) => r.path)))
           "
@@ -954,6 +1032,7 @@ onMounted(() => {
 .file-manager__selectbar {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 12px;
   padding: 8px 14px;
   background: rgba(212, 175, 55, 0.1);
@@ -961,6 +1040,13 @@ onMounted(() => {
   border-radius: 10px;
   font-size: 13px;
   color: #e8d9a8;
+}
+
+.file-manager__selectbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
 }
 
 .gc-fade-enter-active,
@@ -992,6 +1078,7 @@ onMounted(() => {
 }
 
 .file-manager__card {
+  position: relative;
   background: rgba(9, 28, 58, 0.75);
   border: 1px solid rgba(140, 220, 255, 0.16);
   border-radius: 12px;
@@ -1014,6 +1101,41 @@ onMounted(() => {
   box-shadow:
     0 0 0 1px rgba(212, 175, 55, 0.4),
     0 8px 24px rgba(2, 10, 26, 0.5);
+}
+
+/* 勾选角标：hover 或选择模式显示，点击仅勾选不打开 */
+.file-manager__card-check {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 6;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.75);
+  background: rgba(3, 12, 28, 0.55);
+  color: transparent;
+  font-size: 14px;
+  cursor: pointer;
+  opacity: 0;
+  transition:
+    opacity 0.15s,
+    background 0.15s,
+    color 0.15s;
+}
+
+.file-manager__card:hover .file-manager__card-check,
+.file-manager__card-check--on {
+  opacity: 1;
+}
+
+.file-manager__card-check--on {
+  background: #d4af37;
+  border-color: #d4af37;
+  color: #061228;
 }
 
 .file-manager__card-media {
