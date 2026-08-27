@@ -183,4 +183,22 @@ onMounted(() => {
   margin-top: 12px;
   justify-content: flex-end;
 }
+/* ---------- 移动端适配 ---------- */
+@media (max-width: 768px) {
+  .el-form--inline .el-form-item {
+    margin-right: 0;
+    display: flex;
+    flex: 1 1 auto;
+  }
+
+  .el-pagination {
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+
+  .el-card__body {
+    padding: 12px;
+  }
+}
+
 </style>

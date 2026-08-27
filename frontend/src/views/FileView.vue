@@ -1161,4 +1161,72 @@ onMounted(() => {
   color: #8fb6dd;
   font-size: 13px;
 }
+
+/* ---------- 移动端适配 ---------- */
+@media (max-width: 768px) {
+  .file-manager {
+    flex-direction: column;
+    height: auto;
+    min-height: calc(100vh - 80px);
+    gap: 10px;
+  }
+
+  /* 左侧导航转为顶部横向滚动条 */
+  .file-manager__nav {
+    width: 100%;
+    flex-direction: row;
+    overflow-x: auto;
+    overflow-y: hidden;
+    align-items: center;
+    flex-wrap: nowrap;
+    padding: 8px 10px;
+  }
+
+  .file-manager__nav-search {
+    min-width: 140px;
+    flex-shrink: 0;
+  }
+
+  .file-manager__nav-title,
+  .file-manager__nav-title--recent {
+    display: none;
+  }
+
+  .file-manager__nav-item {
+    flex-shrink: 0;
+    white-space: nowrap;
+  }
+
+  .file-manager__search-list {
+    display: flex;
+    gap: 6px;
+    overflow-x: auto;
+  }
+
+  .file-manager__search-item {
+    flex-shrink: 0;
+    flex-direction: column;
+    align-items: flex-start;
+    min-width: 120px;
+  }
+
+  .file-manager__main {
+    min-width: 0;
+  }
+
+  .file-manager__toolbar {
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  /* 工具栏按钮组换行 */
+  .file-manager__toolbar-actions {
+    flex-wrap: wrap;
+  }
+
+  /* 预览抽屉在移动端近全宽 */
+  .file-manager__drawer {
+    width: 94% !important;
+  }
+}
 </style>

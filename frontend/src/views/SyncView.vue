@@ -181,14 +181,14 @@ onMounted(() => {
 
     <!-- 统计卡 -->
     <el-row :gutter="12" class="sync-view__stats">
-      <el-col :span="6">
+      <el-col :xs="12" :span="6">
         <div class="sync-view__stat">
           <div class="sync-view__stat-label">任务总数</div>
           <div class="sync-view__stat-value">{{ stat.total }}</div>
           <div class="sync-view__stat-line" />
         </div>
       </el-col>
-      <el-col :span="6">
+      <el-col :xs="12" :span="6">
         <div class="sync-view__stat">
           <div class="sync-view__stat-label">已启用</div>
           <div class="sync-view__stat-value" style="color: #67e8a0">
@@ -197,7 +197,7 @@ onMounted(() => {
           <div class="sync-view__stat-line" style="background: #67e8a0" />
         </div>
       </el-col>
-      <el-col :span="6">
+      <el-col :xs="12" :span="6">
         <div class="sync-view__stat">
           <div class="sync-view__stat-label">上次成功</div>
           <div class="sync-view__stat-value" style="color: #6ec8ff">
@@ -206,7 +206,7 @@ onMounted(() => {
           <div class="sync-view__stat-line" style="background: #6ec8ff" />
         </div>
       </el-col>
-      <el-col :span="6">
+      <el-col :xs="12" :span="6">
         <div class="sync-view__stat">
           <div class="sync-view__stat-label">上次失败</div>
           <div class="sync-view__stat-value" style="color: #f5a3a3">
@@ -588,4 +588,22 @@ onMounted(() => {
   font-size: 12px;
   color: #e8d9a8;
 }
+/* ---------- 移动端适配 ---------- */
+@media (max-width: 768px) {
+  .el-form--inline .el-form-item {
+    margin-right: 0;
+    display: flex;
+    flex: 1 1 auto;
+  }
+
+  .el-pagination {
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+
+  .el-card__body {
+    padding: 12px;
+  }
+}
+
 </style>

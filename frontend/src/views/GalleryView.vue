@@ -549,4 +549,39 @@ onBeforeUnmount(() => {
 .gallery__panel :deep(.el-dialog) {
   --el-dialog-bg-color: rgba(6, 20, 44, 0.96);
 }
+
+/* ---------- 移动端适配 ---------- */
+@media (max-width: 768px) {
+  .gallery__waterfall {
+    columns: 2;
+    column-gap: 8px;
+  }
+
+  .gallery__item {
+    margin-bottom: 8px;
+  }
+
+  .gallery__header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+
+  .gallery__header-actions {
+    width: 100%;
+    flex-wrap: wrap;
+  }
+
+  .gallery__lightbox-body {
+    min-height: 40vh;
+  }
+
+  .gallery__nav--prev {
+    left: 4px;
+  }
+
+  .gallery__nav--next {
+    right: 4px;
+  }
+}
 </style>

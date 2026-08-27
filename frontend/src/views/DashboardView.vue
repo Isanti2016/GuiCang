@@ -246,7 +246,7 @@ const actionLabel = (action: string): string => {
 <template>
   <div class="dashboard">
     <el-row :gutter="12">
-      <el-col :span="6">
+      <el-col :xs="12" :span="6">
         <el-card shadow="never" class="stat-card">
           <div class="stat-card__icon stat-card__icon--disk">
             <el-icon><Coin /></el-icon>
@@ -268,7 +268,7 @@ const actionLabel = (action: string): string => {
           </div>
         </el-card>
       </el-col>
-      <el-col :span="6">
+      <el-col :xs="12" :span="6">
         <el-card shadow="never" class="stat-card">
           <div class="stat-card__icon stat-card__icon--cpu">
             <el-icon><Cpu /></el-icon>
@@ -280,7 +280,7 @@ const actionLabel = (action: string): string => {
           </div>
         </el-card>
       </el-col>
-      <el-col :span="6">
+      <el-col :xs="12" :span="6">
         <el-card shadow="never" class="stat-card">
           <div class="stat-card__icon stat-card__icon--mem">
             <el-icon><Odometer /></el-icon>
@@ -294,7 +294,7 @@ const actionLabel = (action: string): string => {
           </div>
         </el-card>
       </el-col>
-      <el-col :span="6">
+      <el-col :xs="12" :span="6">
         <el-card shadow="never" class="stat-card">
           <div class="stat-card__icon stat-card__icon--file">
             <el-icon><Folder /></el-icon>
@@ -315,7 +315,7 @@ const actionLabel = (action: string): string => {
     </el-row>
 
     <el-row :gutter="12" class="dashboard__charts">
-      <el-col :span="16">
+      <el-col :xs="24" :span="16">
         <el-card shadow="never" class="chart-card">
           <template #header>
             <span class="chart-card__title">CPU 使用率趋势</span>
@@ -324,7 +324,7 @@ const actionLabel = (action: string): string => {
           <div ref="trendRef" class="dashboard__chart" />
         </el-card>
       </el-col>
-      <el-col :span="8">
+      <el-col :xs="24" :span="8">
         <el-card shadow="never" class="chart-card">
           <template #header>
             <span class="chart-card__title">磁盘占用</span>
@@ -336,7 +336,7 @@ const actionLabel = (action: string): string => {
     </el-row>
 
     <el-row :gutter="12" class="dashboard__charts">
-      <el-col :span="8">
+      <el-col :xs="24" :span="8">
         <el-card shadow="never" class="chart-card">
           <template #header>
             <span class="chart-card__title">文件类型分布</span>
@@ -345,7 +345,7 @@ const actionLabel = (action: string): string => {
           <div ref="fileTypeRef" class="dashboard__chart" />
         </el-card>
       </el-col>
-      <el-col :span="16">
+      <el-col :xs="24" :span="16">
         <el-card shadow="never" class="chart-card">
           <template #header>
             <span class="chart-card__title">用户存储占用</span>

@@ -99,3 +99,27 @@ html.dark .el-textarea__inner {
 ::-webkit-scrollbar-track {
   background: transparent;
 }
+
+/* ============ 移动端通用适配 ============ */
+@media (max-width: 768px) {
+  /* 内容区不横向溢出 */
+  #app {
+    overflow-x: hidden;
+  }
+
+  /* 卡片占满宽度且不撑破容器 */
+  .el-card {
+    max-width: 100%;
+  }
+
+  /* 对话框/抽屉在窄屏几乎全宽 */
+  .el-dialog {
+    --el-dialog-width: 92vw !important;
+  }
+
+  /* 面包屑与工具按钮换行 */
+  .el-breadcrumb {
+    white-space: nowrap;
+    overflow-x: auto;
+  }
+}

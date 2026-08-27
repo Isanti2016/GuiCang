@@ -211,4 +211,16 @@ async function handleLogin(): Promise<void> {
   color: rgba(143, 182, 221, 0.65);
   font-size: 12px;
 }
+
+/* ---------- 移动端适配 ---------- */
+@media (max-width: 768px) {
+  .login-page {
+    padding: 16px;
+  }
+
+  .login-card {
+    width: 100%;
+    max-width: 420px;
+  }
+}
 </style>

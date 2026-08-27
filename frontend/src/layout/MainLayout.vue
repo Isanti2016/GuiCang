@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from "vue";
+import { computed, onBeforeUnmount, onMounted, reactive, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { ElMessage, type FormInstance, type FormRules } from "element-plus";
 import TechBackground from "@/components/TechBackground.vue";
@@ -10,6 +10,26 @@ import { changePassword } from "@/api/auth";
 const route = useRoute();
 const router = useRouter();
 const authStore = useAuthStore();
+
+/** 是否为移动端窄屏（<768px），用于切换抽屉式导航。 */
+const isMobile = ref(false);
+
+/** 移动端抽屉菜单开关。 */
+const drawerOpen = ref(false);
+
+function updateViewport(): void {
+  isMobile.value = window.innerWidth < 768;
+  if (!isMobile.value) {
+    drawerOpen.value = false;
+  }
+}
+
+/** 移动端：选中菜单后关闭抽屉。 */
+function handleMenuSelect(): void {
+  if (isMobile.value) {
+    drawerOpen.value = false;
+  }
+}
 
 const title = computed(() => (route.meta.title as string) || "归藏 NAS");
 const username = computed(() => authStore.user?.username ?? "");
@@ -121,6 +141,12 @@ onMounted(() => {
       // 失败由拦截器处理（401 会跳登录）
     });
   }
+  updateViewport();
+  window.addEventListener("resize", updateViewport);
+});
+
+onBeforeUnmount(() => {
+  window.removeEventListener("resize", updateViewport);
 });
 </script>
 
@@ -128,7 +154,11 @@ onMounted(() => {
   <div class="main-layout-wrap">
     <TechBackground />
     <el-container class="main-layout">
-      <el-aside width="200px" class="main-layout__aside">
+      <el-aside
+        v-show="!isMobile"
+        width="200px"
+        class="main-layout__aside"
+      >
         <div class="main-layout__brand">GuiCang 归藏</div>
         <el-menu router :default-active="route.path" class="main-layout__menu">
           <el-menu-item
@@ -144,11 +174,21 @@ onMounted(() => {
 
       <el-container>
         <el-header class="main-layout__header">
-          <span class="main-layout__title">{{ title }}</span>
+          <div class="main-layout__header-left">
+            <button
+              v-if="isMobile"
+              class="main-layout__burger"
+              aria-label="打开菜单"
+              @click="drawerOpen = true"
+            >
+              <el-icon :size="22"><Menu /></el-icon>
+            </button>
+            <span class="main-layout__title">{{ title }}</span>
+          </div>
           <el-dropdown @command="handleCommand">
             <span class="main-layout__user">
               {{ username }}
-              <el-icon><ArrowDown /></el-icon>
+              <el-icon v-if="!isMobile"><ArrowDown /></el-icon>
             </span>
             <template #dropdown>
               <el-dropdown-menu>
@@ -169,6 +209,32 @@ onMounted(() => {
         </el-main>
       </el-container>
     </el-container>
+
+    <!-- 移动端抽屉导航 -->
+    <el-drawer
+      v-model="drawerOpen"
+      direction="ltr"
+      :with-header="false"
+      size="220px"
+      class="main-layout__drawer"
+    >
+      <div class="main-layout__drawer-brand">GuiCang 归藏</div>
+      <el-menu
+        router
+        :default-active="route.path"
+        class="main-layout__menu main-layout__drawer-menu"
+        @select="handleMenuSelect"
+      >
+        <el-menu-item
+          v-for="menu in menus"
+          :key="menu.path"
+          :index="menu.path"
+        >
+          <el-icon><component :is="menu.icon" /></el-icon>
+          <span>{{ menu.title }}</span>
+        </el-menu-item>
+      </el-menu>
+    </el-drawer>
 
     <el-dialog
       v-model="pwdDialogOpen"
@@ -316,10 +382,42 @@ onMounted(() => {
   backdrop-filter: blur(6px);
 }
 
+.main-layout__header-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.main-layout__burger {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border: 1px solid rgba(126, 210, 255, 0.25);
+  border-radius: 8px;
+  background: rgba(110, 200, 255, 0.08);
+  color: #bfe9ff;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition:
+    background 0.2s ease,
+    border-color 0.2s ease;
+}
+
+.main-layout__burger:hover {
+  background: rgba(110, 200, 255, 0.18);
+  border-color: rgba(212, 175, 55, 0.5);
+}
+
 .main-layout__title {
   font-size: 16px;
   font-weight: 500;
   color: #bfe9ff;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .main-layout__user {
@@ -328,6 +426,10 @@ onMounted(() => {
   gap: 4px;
   cursor: pointer;
   color: #bfe9ff;
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .main-layout__content {
@@ -368,5 +470,31 @@ onMounted(() => {
 
 .main-layout__help-drawer :deep(.el-drawer__close-btn:hover) {
   color: #d4af37;
+}
+
+/* ---------- 移动端抽屉导航 ---------- */
+.main-layout__drawer {
+  --el-drawer-bg-color: rgba(4, 14, 32, 0.98);
+}
+
+.main-layout__drawer-brand {
+  height: 60px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #eaf6ff;
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: 2px;
+  text-shadow: 0 0 14px rgba(110, 200, 255, 0.5);
+  border-bottom: 1px solid rgba(212, 175, 55, 0.4);
+  margin-bottom: 8px;
+}
+
+/* ---------- 移动端内容区 ---------- */
+@media (max-width: 768px) {
+  .main-layout__content {
+    padding: 10px;
+  }
 }
 </style>

@@ -128,14 +128,14 @@ onBeforeUnmount(() => {
   <div class="monitor-view">
     <!-- 实时指标卡 -->
     <el-row :gutter="12">
-      <el-col :span="6">
+      <el-col :xs="12" :span="6">
         <div class="monitor-view__stat">
           <div class="monitor-view__stat-label">CPU 使用率</div>
           <div class="monitor-view__stat-value" style="color: #6ec8ff">{{ formatPercent(cpuPercent) }}</div>
           <div class="monitor-view__stat-line" style="background: #6ec8ff" />
         </div>
       </el-col>
-      <el-col :span="6">
+      <el-col :xs="12" :span="6">
         <div class="monitor-view__stat">
           <div class="monitor-view__stat-label">内存使用率</div>
           <div class="monitor-view__stat-value" style="color: #67e8a0">{{ formatPercent(memPercent) }}</div>
@@ -143,7 +143,7 @@ onBeforeUnmount(() => {
           <div class="monitor-view__stat-extra">可用 {{ formatBytes(overview?.memAvailKb ?? 0) }}</div>
         </div>
       </el-col>
-      <el-col :span="6">
+      <el-col :xs="12" :span="6">
         <div class="monitor-view__stat">
           <div class="monitor-view__stat-label">磁盘使用率</div>
           <div class="monitor-view__stat-value" style="color: #e8d9a8">{{ formatPercent(diskPercent) }}</div>
@@ -151,7 +151,7 @@ onBeforeUnmount(() => {
           <div class="monitor-view__stat-extra">可用 {{ formatBytes(overview?.diskAvailKb ?? 0) }}</div>
         </div>
       </el-col>
-      <el-col :span="6">
+      <el-col :xs="12" :span="6">
         <div class="monitor-view__stat">
           <div class="monitor-view__stat-label">系统负载（1/5/15）</div>
           <div class="monitor-view__stat-value" style="color: #f5a3a3; font-size: 22px">{{ loadAvg }}</div>
@@ -291,5 +291,16 @@ onBeforeUnmount(() => {
 
 .monitor-view__chart {
   height: 220px;
+}
+
+/* ---------- 移动端适配 ---------- */
+@media (max-width: 768px) {
+  .monitor-view__charts {
+    grid-template-columns: 1fr;
+  }
+
+  .monitor-view__stat-value {
+    font-size: 18px;
+  }
 }
 </style>
