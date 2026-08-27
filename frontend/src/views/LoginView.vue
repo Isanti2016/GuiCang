@@ -49,7 +49,7 @@ async function handleLogin(): Promise<void> {
     <el-card class="login-card">
       <div class="login-card__logo">
         <span class="login-card__logo-ring">
-          <el-icon :size="40" color="#bfe9ff"><Cpu /></el-icon>
+          <img src="/logo.svg" alt="GuiCang 归藏" class="login-card__logo-img" />
         </span>
       </div>
       <h1 class="login-card__title">GuiCang 归藏</h1>
@@ -163,6 +163,12 @@ async function handleLogin(): Promise<void> {
   border-radius: 50%;
   border: 1px solid rgba(212, 175, 55, 0.65);
   box-shadow: 0 0 18px rgba(110, 200, 255, 0.25);
+}
+
+.login-card__logo-img {
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
 }
 
 .login-card__title {

@@ -35,26 +35,64 @@ const title = computed(() => (route.meta.title as string) || "归藏 NAS");
 const username = computed(() => authStore.user?.username ?? "");
 const isAdmin = computed(() => authStore.isAdmin());
 
-const menus = computed(() => {
-  const items = [
-    { path: "/dashboard", title: "监控大屏", icon: "Odometer" },
-    { path: "/files", title: "文件管理", icon: "Folder" },
-    { path: "/monitor", title: "监控详情", icon: "DataLine", adminOnly: true },
-    { path: "/gallery", title: "相册", icon: "Picture" },
-    { path: "/trash", title: "回收站", icon: "Delete" },
-    { path: "/admin/users", title: "用户管理", icon: "User", adminOnly: true },
+/** 菜单分组（概览 / 存储 / 系统管理），管理员分组按权限过滤。 */
+interface MenuItem {
+  path: string;
+  title: string;
+  icon: string;
+  adminOnly?: boolean;
+}
+
+interface MenuGroup {
+  title: string;
+  icon: string;
+  items: MenuItem[];
+  adminOnly?: boolean;
+}
+
+const menuGroups = computed<MenuGroup[]>(() => {  const groups: MenuGroup[] = [
     {
-      path: "/admin/roles",
-      title: "角色与权限",
-      icon: "Lock",
-      adminOnly: true,
+      title: "概览",
+      icon: "Odometer",
+      items: [
+        { path: "/dashboard", title: "监控大屏", icon: "Odometer" },
+        { path: "/monitor", title: "监控详情", icon: "DataLine", adminOnly: true },
+      ],
     },
-    { path: "/sync", title: "同步任务", icon: "Clock", adminOnly: true },
-    { path: "/audit", title: "操作记录", icon: "List", adminOnly: true },
-    { path: "/logs", title: "系统日志", icon: "Document", adminOnly: true },
-    { path: "/settings", title: "系统设置", icon: "Setting", adminOnly: true },
+    {
+      title: "存储",
+      icon: "Folder",
+      items: [
+        { path: "/files", title: "文件管理", icon: "Folder" },
+        { path: "/gallery", title: "相册", icon: "Picture" },
+        { path: "/trash", title: "回收站", icon: "Delete" },
+      ],
+    },
+    {
+      title: "系统管理",
+      icon: "Setting",
+      adminOnly: true,
+      items: [
+        { path: "/admin/users", title: "用户管理", icon: "User" },
+        { path: "/admin/roles", title: "角色与权限", icon: "Lock" },
+        { path: "/sync", title: "同步任务", icon: "Clock" },
+        { path: "/audit", title: "操作记录", icon: "List" },
+        { path: "/logs", title: "系统日志", icon: "Document" },
+        { path: "/settings", title: "系统设置", icon: "Setting" },
+      ],
+    },
   ];
-  return items.filter((item) => !item.adminOnly || isAdmin.value);
+  return groups
+    .map((g) => ({ ...g, items: g.items.filter((i) => !i.adminOnly || isAdmin.value) }))
+    .filter((g) => (g.adminOnly ? isAdmin.value : g.items.length > 0));
+});
+
+/** 当前路由所在分组名（用于默认展开对应菜单组）。 */
+const defaultOpeneds = computed(() => {
+  const group = menuGroups.value.find((g) =>
+    g.items.some((i) => i.path === route.path),
+  );
+  return group ? [group.title] : [];
 });
 
 /** 退出登录并回到登录页。 */
@@ -159,16 +197,34 @@ onBeforeUnmount(() => {
         width="200px"
         class="main-layout__aside"
       >
-        <div class="main-layout__brand">GuiCang 归藏</div>
-        <el-menu router :default-active="route.path" class="main-layout__menu">
-          <el-menu-item
-            v-for="menu in menus"
-            :key="menu.path"
-            :index="menu.path"
+        <div class="main-layout__brand">
+          <img src="/logo.svg" alt="GuiCang" class="main-layout__logo" />
+          <span>GuiCang 归藏</span>
+        </div>
+        <el-menu
+          router
+          :default-active="route.path"
+          :default-openeds="defaultOpeneds"
+          class="main-layout__menu"
+        >
+          <el-sub-menu
+            v-for="group in menuGroups"
+            :key="group.title"
+            :index="group.title"
           >
-            <el-icon><component :is="menu.icon" /></el-icon>
-            <span>{{ menu.title }}</span>
-          </el-menu-item>
+            <template #title>
+              <el-icon><component :is="group.icon" /></el-icon>
+              <span>{{ group.title }}</span>
+            </template>
+            <el-menu-item
+              v-for="menu in group.items"
+              :key="menu.path"
+              :index="menu.path"
+            >
+              <el-icon><component :is="menu.icon" /></el-icon>
+              <span>{{ menu.title }}</span>
+            </el-menu-item>
+          </el-sub-menu>
         </el-menu>
       </el-aside>
 
@@ -218,21 +274,35 @@ onBeforeUnmount(() => {
       size="220px"
       class="main-layout__drawer"
     >
-      <div class="main-layout__drawer-brand">GuiCang 归藏</div>
+      <div class="main-layout__drawer-brand">
+        <img src="/logo.svg" alt="GuiCang" class="main-layout__logo" />
+        <span>GuiCang 归藏</span>
+      </div>
       <el-menu
         router
         :default-active="route.path"
+        :default-openeds="defaultOpeneds"
         class="main-layout__menu main-layout__drawer-menu"
         @select="handleMenuSelect"
       >
-        <el-menu-item
-          v-for="menu in menus"
-          :key="menu.path"
-          :index="menu.path"
+        <el-sub-menu
+          v-for="group in menuGroups"
+          :key="group.title"
+          :index="group.title"
         >
-          <el-icon><component :is="menu.icon" /></el-icon>
-          <span>{{ menu.title }}</span>
-        </el-menu-item>
+          <template #title>
+            <el-icon><component :is="group.icon" /></el-icon>
+            <span>{{ group.title }}</span>
+          </template>
+          <el-menu-item
+            v-for="menu in group.items"
+            :key="menu.path"
+            :index="menu.path"
+          >
+            <el-icon><component :is="menu.icon" /></el-icon>
+            <span>{{ menu.title }}</span>
+          </el-menu-item>
+        </el-sub-menu>
       </el-menu>
     </el-drawer>
 
@@ -336,12 +406,21 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   justify-content: center;
+  gap: 8px;
   color: #eaf6ff;
   font-size: 18px;
   font-weight: 600;
   letter-spacing: 2px;
   text-shadow: 0 0 14px rgba(110, 200, 255, 0.5);
   border-bottom: 1px solid rgba(212, 175, 55, 0.4);
+}
+
+.main-layout__logo {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  box-shadow: 0 0 12px rgba(110, 200, 255, 0.45);
+  flex-shrink: 0;
 }
 
 .main-layout__menu {

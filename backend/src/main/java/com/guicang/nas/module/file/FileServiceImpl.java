@@ -156,6 +156,7 @@ public class FileServiceImpl implements FileService {
    * @param recursive 是否递归删除目录
    */
   @Override
+  @Audit(action = "file.delete", resource = "#paths")
   public void deleteBatch(List<String> paths, boolean recursive) {
     for (String path : paths) {
       delete(path, recursive);
@@ -169,6 +170,7 @@ public class FileServiceImpl implements FileService {
    * @return 清理的条目数
    */
   @Override
+  @Audit(action = "file.trash.auto", resource = "'自动清理(保留 ' + #days + ' 天)'")
   public int purgeExpiredTrash(int days) {
     if (days <= 0) {
       return 0;

@@ -30,6 +30,10 @@ const actionLabels: Record<string, string> = {
   "file.rename": "重命名",
   "file.move": "移动",
   "file.delete": "删除",
+  "file.restore": "恢复",
+  "file.purge": "彻底删除",
+  "file.trash.empty": "清空回收站",
+  "file.trash.auto": "自动清理回收站",
   "sync.create": "新建同步任务",
   "sync.update": "编辑同步任务",
   "sync.delete": "删除同步任务",
@@ -37,6 +41,15 @@ const actionLabels: Record<string, string> = {
 
 /** 动作码转中文标签。 */
 const actionLabel = (action: string): string => actionLabels[action] ?? action;
+
+/** 对象列友好显示：纯数字（回收站条目 id）转可读文本。 */
+function resourceLabel(resource: string | null): string {
+  if (!resource) return "--";
+  if (/^\d+$/.test(resource)) {
+    return `回收站条目 #${resource}`;
+  }
+  return resource;
+}
 
 /** 按当前筛选条件分页加载审计日志。 */
 async function load(): Promise<void> {
@@ -132,12 +145,9 @@ onMounted(() => {
         <el-table-column label="动作" width="130">
           <template #default="{ row }">{{ actionLabel(row.action) }}</template>
         </el-table-column>
-        <el-table-column
-          prop="resource"
-          label="对象"
-          min-width="200"
-          show-overflow-tooltip
-        />
+        <el-table-column label="对象" min-width="200" show-overflow-tooltip>
+          <template #default="{ row }">{{ resourceLabel(row.resource) }}</template>
+        </el-table-column>
         <el-table-column prop="result" label="结果" width="80">
           <template #default="{ row }">
             <el-tag

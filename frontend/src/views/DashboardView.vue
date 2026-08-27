@@ -238,6 +238,10 @@ const actionLabel = (action: string): string => {
     "file.rename": "重命名",
     "file.move": "移动",
     "file.delete": "删除",
+    "file.restore": "恢复",
+    "file.purge": "彻底删除",
+    "file.trash.empty": "清空回收站",
+    "file.trash.auto": "自动清理回收站",
   };
   return labels[action] ?? action;
 };

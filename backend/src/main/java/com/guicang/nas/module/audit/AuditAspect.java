@@ -5,6 +5,7 @@ import com.guicang.nas.common.audit.CurrentUserResolver;
 import com.guicang.nas.module.audit.dto.AuditLogCreateDTO;
 import jakarta.servlet.http.HttpServletRequest;
 import java.lang.reflect.Method;
+import java.util.List;
 import org.aspectj.lang.ProceedingJoinPoint;
 import org.aspectj.lang.annotation.Around;
 import org.aspectj.lang.annotation.Aspect;
@@ -78,11 +79,26 @@ public class AuditAspect {
     }
     try {
       EvaluationContext context = buildEvaluationContext(joinPoint, returnValue);
-      return String.valueOf(expressionParser.parseExpression(resource).getValue(context));
+      Object value = expressionParser.parseExpression(resource).getValue(context);
+      return formatResource(value);
     } catch (Exception e) {
       log.warn("审计 resource SpEL 解析失败: {}", resource, e);
       return resource;
     }
+  }
+
+  /** 格式化审计对象：集合转可读文本（如批量路径 "a.jpg、b.jpg 等 5 项"），其他直接字符串化。 */
+  private String formatResource(Object value) {
+    if (value instanceof java.util.Collection<?> items) {
+      if (items.isEmpty()) {
+        return "";
+      }
+      List<?> first = items.stream().limit(3).toList();
+      String joined =
+          first.stream().map(String::valueOf).collect(java.util.stream.Collectors.joining("、"));
+      return items.size() > 3 ? joined + " 等 " + items.size() + " 项" : joined;
+    }
+    return value == null ? "" : String.valueOf(value);
   }
 
   private EvaluationContext buildEvaluationContext(
