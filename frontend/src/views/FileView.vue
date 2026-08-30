@@ -35,6 +35,12 @@ import {
   type FileEntry,
 } from "@/api/file";
 import { createShare, type ShareVO } from "@/api/share";
+import {
+  addFavorite,
+  listFavorites,
+  removeFavorite,
+  type FavoriteVO,
+} from "@/api/favorite";
 
 const md = new MarkdownIt({
   html: false,
@@ -369,6 +375,8 @@ const shareResult = ref<ShareVO | null>(null);
 const duplicateDialog = ref(false);
 const duplicateLoading = ref(false);
 const duplicateGroups = ref<DuplicateGroup[]>([]);
+const favoriteDialog = ref(false);
+const favorites = ref<FavoriteVO[]>([]);
 const versionDialog = ref(false);
 const versionLoading = ref(false);
 const versions = ref<FileVersion[]>([]);
@@ -483,6 +491,40 @@ async function handleFindDuplicates(): Promise<void> {
 async function handleDeleteDuplicate(entry: FileEntry): Promise<void> {
   await handleDelete([entry]);
   await handleFindDuplicates();
+}
+
+/** 收藏文件/目录。 */
+async function handleFavorite(entry: FileEntry): Promise<void> {
+  try {
+    await addFavorite(entry.path);
+    ElMessage.success("已收藏");
+  } catch {
+    /* 拦截器已提示 */
+  }
+}
+
+/** 打开收藏列表。 */
+async function openFavorites(): Promise<void> {
+  favoriteDialog.value = true;
+  try {
+    favorites.value = await listFavorites();
+  } catch {
+    /* 忽略 */
+  }
+}
+
+/** 取消收藏。 */
+async function handleRemoveFavorite(fav: FavoriteVO): Promise<void> {
+  await removeFavorite(fav.path);
+  ElMessage.success("已取消收藏");
+  favorites.value = await listFavorites();
+}
+
+/** 跳转到收藏项所在目录。 */
+function jumpToFavorite(fav: FavoriteVO): void {
+  favoriteDialog.value = false;
+  const slash = fav.path.lastIndexOf("/");
+  void navigate(slash >= 0 ? fav.path.substring(0, slash) : "");
 }
 
 /** 打开历史版本弹窗。 */
@@ -662,6 +704,10 @@ onMounted(() => {
       </template>
 
       <template v-else>
+        <div class="file-manager__nav-item" @click="openFavorites">
+          <el-icon color="#d4af37"><Star /></el-icon>
+          <span>收藏</span>
+        </div>
         <div class="file-manager__nav-title">位置</div>
         <div
           class="file-manager__nav-item"
@@ -847,6 +893,9 @@ onMounted(() => {
               >
               <el-button link size="small" @click.stop="openShare(entry)"
                 >分享</el-button
+              >
+              <el-button link size="small" @click.stop="handleFavorite(entry)"
+                >收藏</el-button
               >
               <el-button link size="small" @click.stop="openMove(entry)"
                 >移动</el-button
@@ -1206,6 +1255,41 @@ onMounted(() => {
       </div>
       <template #footer>
         <el-button @click="versionDialog = false">关闭</el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 收藏 -->
+    <el-dialog v-model="favoriteDialog" title="收藏" width="520px">
+      <el-empty v-if="favorites.length === 0" description="暂无收藏" :image-size="60" />
+      <div v-else style="max-height: 400px; overflow: auto">
+        <div
+          v-for="fav in favorites"
+          :key="fav.path"
+          @click="jumpToFavorite(fav)"
+          style="
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 4px;
+            border-bottom: 1px solid #eee;
+            cursor: pointer;
+          "
+        >
+          <div style="min-width: 0">
+            <div style="font-weight: 500">{{ fav.name }}</div>
+            <div style="color: #999; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">{{ fav.path }}</div>
+          </div>
+          <el-button
+            link
+            type="danger"
+            size="small"
+            @click.stop="handleRemoveFavorite(fav)"
+            >取消</el-button
+          >
+        </div>
+      </div>
+      <template #footer>
+        <el-button @click="favoriteDialog = false">关闭</el-button>
       </template>
     </el-dialog>
   </div>
