@@ -4,6 +4,7 @@ import com.guicang.nas.common.Result;
 import com.guicang.nas.infra.storage.FileEntry;
 import com.guicang.nas.module.file.dto.DuplicateGroup;
 import com.guicang.nas.module.file.dto.FileBatchDeleteRequest;
+import com.guicang.nas.module.file.dto.FileChunkCompleteRequest;
 import com.guicang.nas.module.file.dto.FileMoveRequest;
 import com.guicang.nas.module.file.dto.FilePathRequest;
 import com.guicang.nas.module.file.dto.FileRenameRequest;
@@ -238,6 +239,31 @@ public class FileController {
   @GetMapping("/duplicates")
   public Result<List<DuplicateGroup>> duplicates(@RequestParam(defaultValue = "") String path) {
     return Result.ok(fileService.findDuplicates(path));
+  }
+
+  /**
+   * 上传单个分片（大文件分片上传）。
+   */
+  @PostMapping("/chunk")
+  public Result<Void> uploadChunk(
+      @RequestParam(defaultValue = "") String path,
+      @RequestParam String filename,
+      @RequestParam String uploadId,
+      @RequestParam int chunkIndex,
+      @RequestParam int totalChunks,
+      @RequestParam("file") MultipartFile file) {
+    fileService.uploadChunk(path, filename, uploadId, chunkIndex, totalChunks, file);
+    return Result.ok();
+  }
+
+  /**
+   * 合并分片为完整文件。
+   */
+  @PostMapping("/chunk/complete")
+  public Result<FileEntry> completeChunk(@Valid @RequestBody FileChunkCompleteRequest request) {
+    return Result.ok(
+        fileService.completeChunkUpload(
+            request.path(), request.filename(), request.uploadId(), request.totalChunks()));
   }
 
   /**

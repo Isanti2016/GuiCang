@@ -22,6 +22,8 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.zip.ZipEntry;
 import java.io.InputStream;
+import java.io.OutputStream;
+import java.nio.file.StandardCopyOption;
 import java.security.MessageDigest;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -724,6 +726,82 @@ public class FileServiceImpl implements FileService {
     if (used + newSize > sysUser.getQuotaBytes()) {
       throw new BizException(
           "存储空间配额不足：已用 " + used + " 字节，配额 " + sysUser.getQuotaBytes() + " 字节");
+    }
+  }
+
+  /**
+   * 上传单个分片（大文件分片上传）。
+   */
+  @Override
+  public void uploadChunk(
+      String path, String filename, String uploadId, int chunkIndex, int totalChunks,
+      MultipartFile file) {
+    AuthenticatedUser user = requireUser();
+    dirPermissionService.check(user.username(), authorities(), path, DirPerm.WRITE);
+    if (filename == null || filename.isBlank() || filename.contains("/") || filename.contains("\\")) {
+      throw new BizException("文件名不合法");
+    }
+    if (FileTypeUtils.isBlocked(filename, blockedExtensions)) {
+      throw new BizException("不允许上传该类型文件: " + filename);
+    }
+    Path chunkDir = storageService.root().resolve(".guicang-tmp/chunks").resolve(uploadId);
+    try {
+      Files.createDirectories(chunkDir);
+      Files.copy(file.getInputStream(), chunkDir.resolve(String.valueOf(chunkIndex)),
+          StandardCopyOption.REPLACE_EXISTING);
+    } catch (IOException e) {
+      throw new BizException("分片上传失败: " + e.getMessage());
+    }
+  }
+
+  /**
+   * 合并分片为完整文件。
+   */
+  @Override
+  @Audit(action = "file.chunk-complete", resource = "#filename")
+  public FileEntry completeChunkUpload(
+      String path, String filename, String uploadId, int totalChunks) {
+    AuthenticatedUser user = requireUser();
+    dirPermissionService.check(user.username(), authorities(), path, DirPerm.WRITE);
+    Path chunkDir = storageService.root().resolve(".guicang-tmp/chunks").resolve(uploadId);
+    String target = path == null || path.isBlank() ? filename : path + "/" + filename;
+    try {
+      Path tmp = storageService.root().resolve(".guicang-tmp").resolve("merge-" + UUID.randomUUID());
+      long totalSize = 0;
+      try (OutputStream out = Files.newOutputStream(tmp)) {
+        for (int i = 0; i < totalChunks; i++) {
+          Path chunkFile = chunkDir.resolve(String.valueOf(i));
+          if (!Files.exists(chunkFile)) {
+            throw new BizException("分片不完整：缺少第 " + i + " 片");
+          }
+          totalSize += Files.size(chunkFile);
+          Files.copy(chunkFile, out);
+        }
+      }
+      checkQuota(user.username(), totalSize);
+      Path targetAbs = storageService.root().resolve(target);
+      if (targetAbs.getParent() != null) {
+        Files.createDirectories(targetAbs.getParent());
+      }
+      Files.move(tmp, targetAbs, StandardCopyOption.REPLACE_EXISTING);
+      deleteDir(chunkDir);
+      FileEntry entry = findEntry(target);
+      if (entry != null) {
+        indexEntry(entry, user.username());
+      }
+      return entry;
+    } catch (IOException e) {
+      throw new BizException("合并分片失败: " + e.getMessage());
+    }
+  }
+
+  private void deleteDir(Path dir) {
+    try (var stream = Files.list(dir)) {
+      stream.forEach(p -> {
+        try { Files.deleteIfExists(p); } catch (IOException ignored) { }
+      });
+      Files.deleteIfExists(dir);
+    } catch (IOException ignored) {
     }
   }
 

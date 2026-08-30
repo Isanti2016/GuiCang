@@ -26,6 +26,8 @@ import {
   searchFiles,
   streamUrl,
   thumbnailUrl,
+  completeChunkUpload,
+  uploadChunk,
   uploadWithProgress,
   writeText,
   type DuplicateGroup,
@@ -242,6 +244,26 @@ const uploadFiles = ref<UploadUserFile[]>([]);
 const uploadProgress = ref(0);
 const uploading = ref(false);
 
+const CHUNK_SIZE = 5 * 1024 * 1024;
+const CHUNK_THRESHOLD = 50 * 1024 * 1024;
+
+/** 大文件分片上传（>50MB 自动分片，逐片上传后合并）。 */
+async function uploadFileChunked(
+  path: string,
+  file: File,
+  onProgress?: (percent: number) => void,
+): Promise<void> {
+  const uploadId = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
+  for (let i = 0; i < totalChunks; i++) {
+    const start = i * CHUNK_SIZE;
+    const end = Math.min(start + CHUNK_SIZE, file.size);
+    await uploadChunk(path, file.name, uploadId, i, totalChunks, file.slice(start, end));
+    onProgress?.(Math.round(((i + 1) / totalChunks) * 100));
+  }
+  await completeChunkUpload(path, file.name, uploadId, totalChunks);
+}
+
 /** 逐文件上传（带总体进度）。el-upload 的 file-list 元素为 UploadUserFile，取 raw 原生 File。 */
 async function handleUpload(): Promise<void> {
   if (uploadFiles.value.length === 0) return;
@@ -253,11 +275,19 @@ async function handleUpload(): Promise<void> {
     for (const item of uploadFiles.value) {
       const file = item.raw ?? (item as unknown as File);
       if (!file) continue;
-      await uploadWithProgress(currentDir.value, file, (percent) => {
-        uploadProgress.value = Math.round(
-          ((done + percent / 100) / total) * 100,
-        );
-      });
+      if (file.size > CHUNK_THRESHOLD) {
+        await uploadFileChunked(currentDir.value, file, (percent) => {
+          uploadProgress.value = Math.round(
+            ((done + percent / 100) / total) * 100,
+          );
+        });
+      } else {
+        await uploadWithProgress(currentDir.value, file, (percent) => {
+          uploadProgress.value = Math.round(
+            ((done + percent / 100) / total) * 100,
+          );
+        });
+      }
       done += 1;
     }
     ElMessage.success(`已上传 ${done} 个文件`);

@@ -111,7 +111,7 @@ export async function del<T>(
 /** multipart 上传（支持进度回调）。 */
 export async function uploadFile<T>(
   url: string,
-  file: File,
+  file: Blob,
   params?: Record<string, unknown>,
   onProgress?: (percent: number) => void,
 ): Promise<T> {

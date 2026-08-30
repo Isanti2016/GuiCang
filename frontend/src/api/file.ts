@@ -93,6 +93,39 @@ export function restoreVersion(id: number): Promise<void> {
   return post<void>(`/files/versions/${id}/restore`);
 }
 
+/** 上传单个分片（大文件分片上传）。 */
+export function uploadChunk(
+  path: string,
+  filename: string,
+  uploadId: string,
+  chunkIndex: number,
+  totalChunks: number,
+  file: Blob,
+): Promise<void> {
+  return uploadFile<void>("/files/chunk", file, {
+    path,
+    filename,
+    uploadId,
+    chunkIndex,
+    totalChunks,
+  });
+}
+
+/** 合并分片为完整文件。 */
+export function completeChunkUpload(
+  path: string,
+  filename: string,
+  uploadId: string,
+  totalChunks: number,
+): Promise<FileEntry> {
+  return post<FileEntry>("/files/chunk/complete", {
+    path,
+    filename,
+    uploadId,
+    totalChunks,
+  });
+}
+
 /** 递归收集图片/视频（相册数据源）。 */
 export function fetchMedia(path = ""): Promise<FileEntry[]> {
   return get<FileEntry[]>("/files/media", { path });

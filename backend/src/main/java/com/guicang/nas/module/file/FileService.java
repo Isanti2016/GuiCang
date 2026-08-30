@@ -72,6 +72,12 @@ public interface FileService {
   /** 回滚到指定历史版本。 */
   void restoreVersion(Long id);
 
+  /** 上传单个分片（大文件分片上传）。 */
+  void uploadChunk(String path, String filename, String uploadId, int chunkIndex, int totalChunks, MultipartFile file);
+
+  /** 合并分片为完整文件（原子改名 + 建索引）。 */
+  FileEntry completeChunkUpload(String path, String filename, String uploadId, int totalChunks);
+
   /** 递归收集目录下图片/视频（相册数据源；需 READ 权限；限制深度与数量）。 */
   /** 批量打包下载（zip；需 READ 权限）。 */
   FileStreamInfo zipDownload(List<String> paths);
