@@ -89,6 +89,12 @@ const routes: RouteRecordRaw[] = [
         component: () => import("@/views/SystemSettingsView.vue"),
         meta: { title: "系统设置", adminOnly: true },
       },
+      {
+        path: "admin/sessions",
+        name: "admin-sessions",
+        component: () => import("@/views/SessionView.vue"),
+        meta: { title: "会话管理", adminOnly: true },
+      },
     ],
   },
   { path: "/:pathMatch(.*)*", redirect: "/dashboard" },

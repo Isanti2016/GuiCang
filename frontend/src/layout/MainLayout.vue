@@ -88,6 +88,7 @@ const menuGroups = computed<MenuGroup[]>(() => {  const groups: MenuGroup[] = [
         { path: "/audit", title: "操作记录", icon: "List" },
         { path: "/logs", title: "系统日志", icon: "Document" },
         { path: "/settings", title: "系统设置", icon: "Setting" },
+        { path: "/admin/sessions", title: "会话管理", icon: "Monitor" },
       ],
     },
   ];

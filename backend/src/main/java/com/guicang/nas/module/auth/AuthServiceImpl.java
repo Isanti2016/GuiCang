@@ -14,6 +14,11 @@ import com.guicang.nas.module.auth.dto.CurrentUserInfo;
 import com.guicang.nas.module.auth.dto.LoginRequest;
 import com.guicang.nas.module.auth.dto.LoginResponse;
 import com.guicang.nas.module.user.UserService;
+import jakarta.servlet.http.HttpServletRequest;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.context.request.ServletRequestAttributes;
 import java.util.List;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -23,20 +28,25 @@ import org.springframework.stereotype.Service;
 @Service
 public class AuthServiceImpl implements AuthService {
 
+  private static final Logger log = LoggerFactory.getLogger(AuthServiceImpl.class);
+
   private final PAMVerifier pamVerifier;
   private final JwtService jwtService;
   private final UserService userService;
   private final SystemAccountProvisioner systemAccountProvisioner;
+  private final SessionService sessionService;
 
   public AuthServiceImpl(
       PAMVerifier pamVerifier,
       JwtService jwtService,
       UserService userService,
-      SystemAccountProvisioner systemAccountProvisioner) {
+      SystemAccountProvisioner systemAccountProvisioner,
+      SessionService sessionService) {
     this.pamVerifier = pamVerifier;
     this.jwtService = jwtService;
     this.userService = userService;
     this.systemAccountProvisioner = systemAccountProvisioner;
+    this.sessionService = sessionService;
   }
 
   /**
@@ -60,10 +70,29 @@ public class AuthServiceImpl implements AuthService {
     }
     List<String> authorities = userService.loadAuthorities(request.username());
     String token = jwtService.issue(request.username(), result.uid(), authorities);
+    recordSession(token, request.username());
     return new LoginResponse(
         token,
         new CurrentUserInfo(
             request.username(), result.uid(), result.home(), result.shell(), authorities));
+  }
+
+  private void recordSession(String token, String username) {
+    try {
+      ServletRequestAttributes attrs =
+          (ServletRequestAttributes) RequestContextHolder.getRequestAttributes();
+      if (attrs == null) {
+        return;
+      }
+      HttpServletRequest req = attrs.getRequest();
+      String ip = req.getHeader("X-Forwarded-For");
+      if (ip == null || ip.isBlank()) {
+        ip = req.getRemoteAddr();
+      }
+      sessionService.record(token, username, ip, req.getHeader("User-Agent"));
+    } catch (Exception e) {
+      log.debug("记录登录会话失败: {}", e.getMessage());
+    }
   }
 
   /**

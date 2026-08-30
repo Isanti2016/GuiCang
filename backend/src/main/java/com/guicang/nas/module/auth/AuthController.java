@@ -5,6 +5,7 @@ import com.guicang.nas.module.auth.dto.ChangePasswordRequest;
 import com.guicang.nas.module.auth.dto.CurrentUserInfo;
 import com.guicang.nas.module.auth.dto.LoginRequest;
 import com.guicang.nas.module.auth.dto.LoginResponse;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -19,9 +20,11 @@ import org.springframework.web.bind.annotation.RestController;
 public class AuthController {
 
   private final AuthService authService;
+  private final SessionService sessionService;
 
-  public AuthController(AuthService authService) {
+  public AuthController(AuthService authService, SessionService sessionService) {
     this.authService = authService;
+    this.sessionService = sessionService;
   }
 
   /**
@@ -51,9 +54,21 @@ public class AuthController {
    * @return 空结果
    */
   @PostMapping("/logout")
-  public Result<Void> logout() {
+  public Result<Void> logout(HttpServletRequest request) {
+    String token = resolveToken(request);
+    if (token != null) {
+      sessionService.revokeByToken(token);
+    }
     authService.logout();
     return Result.ok();
+  }
+
+  private String resolveToken(HttpServletRequest request) {
+    String header = request.getHeader("Authorization");
+    if (header != null && header.startsWith("Bearer ")) {
+      return header.substring(7);
+    }
+    return request.getParameter("token");
   }
 
   /**

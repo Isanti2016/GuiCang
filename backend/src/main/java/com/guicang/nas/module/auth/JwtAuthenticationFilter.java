@@ -27,9 +27,11 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
   private static final String BEARER_PREFIX = "Bearer ";
 
   private final JwtService jwtService;
+  private final SessionService sessionService;
 
-  public JwtAuthenticationFilter(JwtService jwtService) {
+  public JwtAuthenticationFilter(JwtService jwtService, SessionService sessionService) {
     this.jwtService = jwtService;
+    this.sessionService = sessionService;
   }
 
   @Override
@@ -40,6 +42,11 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     if (token != null) {
       try {
         Claims claims = jwtService.parse(token);
+        if (sessionService.isRevoked(token)) {
+          log.debug("令牌已被踢下线，按未登录处理");
+          filterChain.doFilter(request, response);
+          return;
+        }
         long uid = claims.get(JwtService.CLAIM_UID, Long.class);
         List<String> roles = claims.get(JwtService.CLAIM_ROLES, List.class);
         var principal = new AuthenticatedUser(claims.getSubject(), uid);
