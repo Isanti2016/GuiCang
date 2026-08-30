@@ -42,7 +42,9 @@ const kindLabel = (kind: string): string => {
 };
 
 /** 类型码对应 el-tag 颜色。 */
-const kindTag = (kind: string): "primary" | "success" | "warning" | "info" => {
+const kindTag = (
+  kind: string,
+): "primary" | "success" | "warning" | "info" | "danger" => {
   switch (kind) {
     case "dir":
       return "warning";

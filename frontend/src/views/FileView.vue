@@ -162,6 +162,19 @@ function handleEntryDblClick(entry: FileEntry): void {
   openEntry(entry);
 }
 
+/** 表格行点击：点 selection 勾选列时不打开条目。 */
+function handleRowClick(
+  row: FileEntry,
+  column: { type?: string } = {},
+): void {
+  if (column.type !== "selection") openEntry(row);
+}
+
+/** 表格勾选变化：同步勾选集。 */
+function handleSelectionChange(rows: FileEntry[]): void {
+  selected.value = new Set(rows.map((r) => r.path));
+}
+
 /** 点击卡片勾选角标：仅切换勾选，不打开。 */
 function handleCheckClick(event: Event, entry: FileEntry): void {
   event.stopPropagation();
@@ -675,15 +688,8 @@ onMounted(() => {
           :data="list"
           size="small"
           class="file-manager__table"
-          @row-click="
-            (_row: FileEntry, column: { type?: string }) => {
-              // 点 selection 勾选列时不打开条目
-              if (column.type !== 'selection') openEntry(_row)
-            }
-          "
-          @selection-change="
-            (rows: FileEntry[]) => (selected = new Set(rows.map((r) => r.path)))
-          "
+          @row-click="handleRowClick"
+          @selection-change="handleSelectionChange"
         >
           <el-table-column type="selection" width="40" />
           <el-table-column label="" width="46">

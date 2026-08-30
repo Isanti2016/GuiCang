@@ -148,9 +148,10 @@ function renderUserStorage(): void {
     tooltip: {
       trigger: "axis",
       axisPointer: { type: "shadow" },
-      formatter: (params: Array<{ name: string; value: number }>) => {
-        const p = params[0];
-        return `${p.name}<br/>占用 ${formatBytes(p.value / 1024)} · ${list.find((u) => u.username === p.name)?.fileCount ?? 0} 个文件`;
+      formatter: (params: unknown) => {
+        const arr = Array.isArray(params) ? params : [params];
+        const p = arr[0] as { name?: string; value?: number };
+        return `${p.name ?? ""}<br/>占用 ${formatBytes((p.value ?? 0) / 1024)} · ${list.find((u) => u.username === p.name)?.fileCount ?? 0} 个文件`;
       },
     },
     grid: { left: 50, right: 16, top: 16, bottom: 32 },
