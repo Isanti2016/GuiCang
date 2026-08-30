@@ -12,6 +12,7 @@ import {
 const entries = ref<FileEntry[]>([]);
 const loading = ref(false);
 const filter = ref<"all" | "image" | "video">("all");
+const viewMode = ref<"grid" | "timeline">("grid");
 
 /** 选择模式：开启后点击条目为勾选，关闭后点击打开灯箱。 */
 const selectionMode = ref(false);
@@ -22,6 +23,18 @@ const filtered = computed(() =>
     ? entries.value
     : entries.value.filter((e) => e.kind === filter.value),
 );
+
+/** 时间线分组：按修改日期（mtime）分组，倒序。 */
+const timelineGroups = computed(() => {
+  const map = new Map<string, FileEntry[]>();
+  for (const e of filtered.value) {
+    const d = new Date(e.mtime);
+    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    if (!map.has(key)) map.set(key, []);
+    map.get(key)!.push(e);
+  }
+  return [...map.entries()].sort((a, b) => b[0].localeCompare(a[0]));
+});
 
 const imageCount = computed(
   () => entries.value.filter((e) => e.kind === "image").length,
@@ -103,6 +116,12 @@ function openLightbox(index: number): void {
   lightboxOpen.value = true;
 }
 
+/** 根据条目打开灯箱（时间线视图用）。 */
+function openLightboxFor(entry: FileEntry): void {
+  const index = lightboxList.value.findIndex((e) => e.path === entry.path);
+  if (index >= 0) openLightbox(index);
+}
+
 /** 灯箱上一张（循环）。 */
 function prev(): void {
   lightboxIndex.value =
@@ -162,6 +181,10 @@ onBeforeUnmount(() => {
             </span>
           </div>
           <div class="gallery__header-actions">
+            <el-radio-group v-model="viewMode" size="small">
+              <el-radio-button value="grid">网格</el-radio-button>
+              <el-radio-button value="timeline">时间线</el-radio-button>
+            </el-radio-group>
             <el-segmented
               v-model="filter"
               :options="[
@@ -205,6 +228,29 @@ onBeforeUnmount(() => {
         <div v-if="filtered.length === 0 && !loading" class="gallery__empty">
           还没有媒体文件，去「文件管理」上传图片或视频吧
         </div>
+        <template v-if="viewMode === 'timeline' && filtered.length > 0">
+          <div v-for="g in timelineGroups" :key="g[0]" style="margin-bottom: 20px">
+            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px">
+              <span style="font-weight: 500; font-size: 14px">{{ g[0] }}</span>
+              <span style="color: #999; font-size: 12px">{{ g[1].length }} 项</span>
+            </div>
+            <div style="display: flex; flex-wrap: wrap; gap: 6px">
+              <div
+                v-for="item in g[1]"
+                :key="item.path"
+                @click="openLightboxFor(item)"
+                style="width: 90px; height: 90px; border-radius: 6px; overflow: hidden; cursor: pointer; background: #f0f0f0"
+              >
+                <img
+                  :src="thumbnailUrl(item.path)"
+                  :alt="item.name"
+                  loading="lazy"
+                  style="width: 100%; height: 100%; object-fit: cover"
+                />
+              </div>
+            </div>
+          </div>
+        </template>
         <div v-else class="gallery__waterfall">
           <div
             v-for="(entry, index) in filtered"

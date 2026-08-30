@@ -1,5 +1,6 @@
 package com.guicang.nas.module.sync;
 
+import com.guicang.nas.module.notification.NotificationService;
 import org.quartz.DisallowConcurrentExecution;
 import org.quartz.Job;
 import org.quartz.JobDataMap;
@@ -15,10 +16,15 @@ public class SyncRunJob implements Job {
 
   private final SyncService syncService;
   private final SyncTaskMapper syncTaskMapper;
+  private final NotificationService notificationService;
 
-  public SyncRunJob(SyncService syncService, SyncTaskMapper syncTaskMapper) {
+  public SyncRunJob(
+      SyncService syncService,
+      SyncTaskMapper syncTaskMapper,
+      NotificationService notificationService) {
     this.syncService = syncService;
     this.syncTaskMapper = syncTaskMapper;
+    this.notificationService = notificationService;
   }
 
   @Override
@@ -33,5 +39,12 @@ public class SyncRunJob implements Job {
     task.setLastRunAt(history.getStartedAt());
     task.setLastStatus(history.getStatus());
     syncTaskMapper.updateById(task);
+    if ("failed".equals(history.getStatus()) || "partial".equals(history.getStatus())) {
+      int failed = history.getFailed() == null ? 0 : history.getFailed();
+      String result = "failed".equals(history.getStatus()) ? "失败" : "部分失败";
+      notificationService.create(
+          "sync", "同步任务异常",
+          "任务「" + task.getName() + "」执行" + result + "（失败 " + failed + " 项）。", null);
+    }
   }
 }
