@@ -22,4 +22,10 @@ public interface FileIndexService {
 
   /** 按路径前缀查询（含前缀自身，用于目录扫描对比）。 */
   List<FileIndex> listByPrefix(String prefix);
+
+  /** 更新文件全文内容（md/txt）。 */
+  void updateContent(String path, String content);
+
+  /** 全文检索（LIKE 匹配 content）。 */
+  List<FileIndex> searchContent(String keyword);
 }

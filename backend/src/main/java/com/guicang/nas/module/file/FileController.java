@@ -221,4 +221,21 @@ public class FileController {
   public Result<List<FileEntry>> search(@RequestParam(required = false) String q) {
     return Result.ok(fileService.search(q));
   }
+
+  /**
+   * 全文检索（匹配 md/txt 内容）。
+   */
+  @GetMapping("/search-content")
+  public Result<List<FileEntry>> searchContent(@RequestParam(required = false) String q) {
+    return Result.ok(fileService.searchContent(q));
+  }
+
+  /**
+   * 批量打包下载（zip；多选文件/目录）。
+   */
+  @PostMapping("/zip")
+  public ResponseEntity<?> zipDownload(@RequestBody List<String> paths, HttpServletRequest request)
+      throws IOException {
+    return fileStreamResponder.respond(fileService.zipDownload(paths), request, "attachment");
+  }
 }

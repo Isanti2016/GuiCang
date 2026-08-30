@@ -139,6 +139,15 @@ export async function downloadBlob(
   return response.data as Blob;
 }
 
+/** 以 Blob 下载文件（POST + JSON body，供「打包下载」使用）。 */
+export async function downloadBlobPost(
+  url: string,
+  body?: unknown,
+): Promise<Blob> {
+  const response = await http.post(url, body, { responseType: "blob" });
+  return response.data as Blob;
+}
+
 /** 触发浏览器保存 Blob 为文件。 */
 export function saveBlob(blob: Blob, filename: string): void {
   const objectUrl = URL.createObjectURL(blob);

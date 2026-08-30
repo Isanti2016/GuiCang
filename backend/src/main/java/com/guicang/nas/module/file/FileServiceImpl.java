@@ -16,6 +16,9 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Set;
+import java.util.UUID;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipOutputStream;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -417,6 +420,32 @@ public class FileServiceImpl implements FileService {
   }
 
   /**
+   * 全文检索（匹配 md/txt 内容 + 权限过滤）。
+   *
+   * @param keyword 搜索关键字
+   * @return 匹配且当前用户可读的文件条目列表
+   */
+  @Override
+  public List<FileEntry> searchContent(String keyword) {
+    AuthenticatedUser user = requireUser();
+    return fileIndexService.searchContent(keyword).stream()
+        .filter(
+            idx ->
+                dirPermissionService.has(
+                    user.username(), authorities(), idx.getPath(), DirPerm.READ))
+        .map(
+            idx ->
+                new FileEntry(
+                    idx.getName(),
+                    idx.getPath(),
+                    "dir".equals(idx.getKind()),
+                    idx.getSize() == null ? 0 : idx.getSize(),
+                    idx.getMtime() == null ? 0 : idx.getMtime(),
+                    idx.getKind()))
+        .toList();
+  }
+
+  /**
    * 递归收集目录下图片/视频（相册数据源；需 READ 权限；限制深度与数量）。
    *
    * @param path 起始目录相对路径
@@ -469,6 +498,14 @@ public class FileServiceImpl implements FileService {
   private void indexEntry(FileEntry entry, String owner) {
     fileIndexService.upsert(
         entry.path(), entry.name(), entry.kind(), entry.size(), entry.mtime(), owner);
+    if ("note".equals(entry.kind())) {
+      try {
+        fileIndexService.updateContent(
+            entry.path(), storageService.readText(entry.path(), maxTextSizeBytes));
+      } catch (Exception e) {
+        log.debug("全文索引内容读取失败: {}", entry.path());
+      }
+    }
   }
 
   private void indexDir(String path, String owner) {
@@ -528,5 +565,80 @@ public class FileServiceImpl implements FileService {
       return List.of();
     }
     return authentication.getAuthorities().stream().map(a -> a.getAuthority()).toList();
+  }
+  /**
+   * 批量打包下载（zip）：校验 READ 权限后递归打包到临时 zip。
+   */
+  @Override
+  @Audit(action = "file.zip", resource = "#paths")
+  public FileStreamInfo zipDownload(List<String> paths) {
+    AuthenticatedUser user = requireUser();
+    if (paths == null || paths.isEmpty()) {
+      throw new BizException("请选择要打包的文件或目录");
+    }
+    for (String p : paths) {
+      dirPermissionService.check(user.username(), authorities(), p, DirPerm.READ);
+    }
+    Path zip = buildZip(paths);
+    try {
+      return new FileStreamInfo(zip, Files.size(zip), "application/zip", "guicang-download.zip");
+    } catch (IOException e) {
+      throw new BizException("打包失败: " + e.getMessage());
+    }
+  }
+
+  private static final int ZIP_MAX_DEPTH = 8;
+
+  private Path buildZip(List<String> paths) {
+    Path tmpDir = storageService.root().resolve(".guicang-tmp");
+    try {
+      Files.createDirectories(tmpDir);
+      cleanOldZips(tmpDir);
+      Path zip = tmpDir.resolve("zip-" + UUID.randomUUID() + ".zip");
+      try (ZipOutputStream zos = new ZipOutputStream(Files.newOutputStream(zip))) {
+        for (String p : paths) {
+          addToZip(zos, p, 0);
+        }
+      }
+      return zip;
+    } catch (IOException e) {
+      throw new BizException("打包失败: " + e.getMessage());
+    }
+  }
+
+  private void cleanOldZips(Path tmpDir) {
+    try (var stream = Files.list(tmpDir)) {
+      stream.filter(p -> p.getFileName().toString().endsWith(".zip"))
+          .filter(p -> {
+            try {
+              return Files.getLastModifiedTime(p).toMillis() < System.currentTimeMillis() - 3600_000L;
+            } catch (IOException e) {
+              return false;
+            }
+          })
+          .forEach(p -> {
+            try { Files.deleteIfExists(p); } catch (IOException ignored) { }
+          });
+    } catch (IOException ignored) {
+    }
+  }
+
+  private void addToZip(ZipOutputStream zos, String relPath, int depth) throws IOException {
+    if (depth > ZIP_MAX_DEPTH) {
+      return;
+    }
+    Path abs = storageService.resolveFile(relPath);
+    if (Files.isDirectory(abs)) {
+      for (FileEntry entry : storageService.list(relPath)) {
+        if (TRASH_DIR.equals(entry.name()) || entry.path().startsWith(TRASH_DIR + "/")) {
+          continue;
+        }
+        addToZip(zos, entry.path(), depth + 1);
+      }
+    } else {
+      zos.putNextEntry(new ZipEntry(relPath));
+      Files.copy(abs, zos);
+      zos.closeEntry();
+    }
   }
 }

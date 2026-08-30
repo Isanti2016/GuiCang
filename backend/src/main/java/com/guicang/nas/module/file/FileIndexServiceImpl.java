@@ -146,6 +146,35 @@ public class FileIndexServiceImpl implements FileIndexService {
             .likeRight(FileIndex::getPath, prefix + "/"));
   }
 
+  /**
+   * 更新文件全文内容（md/txt）。
+   */
+  @Override
+  @Transactional
+  public void updateContent(String path, String content) {
+    FileIndex existing = findByPath(path);
+    if (existing == null) {
+      return;
+    }
+    existing.setContent(content);
+    fileIndexMapper.updateById(existing);
+  }
+
+  /**
+   * 全文检索（LIKE 匹配 content 列）。
+   */
+  @Override
+  public List<FileIndex> searchContent(String keyword) {
+    if (keyword == null || keyword.isBlank()) {
+      return List.of();
+    }
+    return fileIndexMapper.selectList(
+        new LambdaQueryWrapper<FileIndex>()
+            .isNotNull(FileIndex::getContent)
+            .like(FileIndex::getContent, keyword)
+            .orderByAsc(FileIndex::getPath));
+  }
+
   private FileIndex findByPath(String relativePath) {
     return fileIndexMapper.selectOne(
         new LambdaQueryWrapper<FileIndex>().eq(FileIndex::getPath, relativePath));

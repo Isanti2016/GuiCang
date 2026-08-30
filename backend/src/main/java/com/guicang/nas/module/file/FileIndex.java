@@ -34,4 +34,7 @@ public class FileIndex {
   private String owner;
 
   private Long indexedAt;
+
+  /** 文本内容（md/txt 全文索引用，其余类型为空）。 */
+  private String content;
 }

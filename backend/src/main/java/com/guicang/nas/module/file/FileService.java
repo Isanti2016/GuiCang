@@ -59,6 +59,13 @@ public interface FileService {
   /** 按名称/路径关键字搜索（索引查询 + 权限过滤）。 */
   List<FileEntry> search(String keyword);
 
+  /** 全文检索（匹配 md/txt 内容 + 权限过滤）。 */
+  List<FileEntry> searchContent(String keyword);
+
+  /** 递归收集目录下图片/视频（相册数据源；需 READ 权限；限制深度与数量）。 */
+  /** 批量打包下载（zip；需 READ 权限）。 */
+  FileStreamInfo zipDownload(List<String> paths);
+
   /** 递归收集目录下图片/视频（相册数据源；需 READ 权限；限制深度与数量）。 */
   List<FileEntry> media(String path);
 }

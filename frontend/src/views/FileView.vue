@@ -13,11 +13,13 @@ import "highlight.js/styles/github-dark.css";
 import {
   deleteFile,
   downloadFileAsBlob,
+  downloadZip,
   listFiles,
   mkdir,
   moveFile,
   readText,
   renameFile,
+  searchContent,
   searchFiles,
   streamUrl,
   thumbnailUrl,
@@ -25,6 +27,7 @@ import {
   writeText,
   type FileEntry,
 } from "@/api/file";
+import { createShare, type ShareVO } from "@/api/share";
 
 const md = new MarkdownIt({
   html: false,
@@ -308,7 +311,31 @@ async function handleBatchDelete(): Promise<void> {
   await handleDelete(selectedEntries.value);
 }
 
+/** 批量打包下载勾选条目。 */
+async function handleBatchZip(): Promise<void> {
+  if (selectedEntries.value.length === 0) return;
+  try {
+    await downloadZip(selectedEntries.value.map((e) => e.path));
+    ElMessage.success("开始打包下载");
+  } catch {
+    ElMessage.error("打包失败");
+  }
+}
+
 const moveDialog = ref(false);
+
+
+// ============ 分享 ============
+const shareDialog = ref(false);
+const shareTarget = ref<FileEntry | null>(null);
+const sharePassword = ref("");
+const shareExpireDays = ref(0);
+const shareResult = ref<ShareVO | null>(null);
+const shareUrl = computed(() =>
+  shareResult.value
+    ? `${window.location.origin}/api/v1/shares/${shareResult.value.token}/download`
+    : "",
+);
 const moveTarget = ref<FileEntry | null>(null);
 
 interface TreeNode {
@@ -357,11 +384,50 @@ function handleMoveNodeClick(node: TreeNode): void {
   moveTargetNode.value = node.path;
 }
 
+/** 打开分享弹窗。 */
+function openShare(entry: FileEntry): void {
+  shareTarget.value = entry;
+  sharePassword.value = "";
+  shareExpireDays.value = 0;
+  shareResult.value = null;
+  shareDialog.value = true;
+}
+
+/** 生成分享链接。 */
+async function handleCreateShare(): Promise<void> {
+  if (!shareTarget.value) return;
+  try {
+    shareResult.value = await createShare(
+      shareTarget.value.path,
+      sharePassword.value || undefined,
+      shareExpireDays.value || undefined,
+    );
+    ElMessage.success("分享链接已生成");
+  } catch {
+    ElMessage.error("生成分享失败");
+  }
+}
+
+/** 复制分享链接。 */
+async function copyShareUrl(): Promise<void> {
+  try {
+    await navigator.clipboard.writeText(shareUrl.value);
+    ElMessage.success("已复制链接");
+  } catch {
+    ElMessage.error("复制失败，请手动复制");
+  }
+}
+
 // ============ 下载 ============
-/** 下载文件为本地文件。 */
+/** 下载文件为本地文件（目录则打包下载）。 */
 async function handleDownload(entry: FileEntry): Promise<void> {
   if (entry.dir) {
-    ElMessage.info("目录请使用打包功能（暂未提供）");
+    try {
+      await downloadZip([entry.path]);
+      ElMessage.success("开始打包下载");
+    } catch {
+      ElMessage.error("打包失败");
+    }
     return;
   }
   try {
@@ -408,13 +474,26 @@ async function handleSave(): Promise<void> {
 }
 
 // ============ 搜索 ============
-/** 按关键字搜索文件。 */
+/** 按关键字搜索文件（名称 + md/txt 全文，结果去重）。 */
 async function handleSearch(): Promise<void> {
   if (!searchKeyword.value.trim()) {
     searchResults.value = [];
     return;
   }
-  searchResults.value = await searchFiles(searchKeyword.value.trim());
+  const kw = searchKeyword.value.trim();
+  const [byName, byContent] = await Promise.all([
+    searchFiles(kw),
+    searchContent(kw),
+  ]);
+  const seen = new Set<string>();
+  const merged: FileEntry[] = [];
+  for (const e of [...byName, ...byContent]) {
+    if (!seen.has(e.path)) {
+      seen.add(e.path);
+      merged.push(e);
+    }
+  }
+  searchResults.value = merged;
 }
 
 /** 跳转到搜索结果所在目录并定位。 */
@@ -590,6 +669,9 @@ onMounted(() => {
             <el-button size="small" type="danger" plain @click="handleBatchDelete"
               >批量删除</el-button
             >
+            <el-button size="small" type="primary" plain @click="handleBatchZip"
+              >打包下载</el-button
+            >
             <el-button size="small" @click="clearSelection">取消选择</el-button>
           </div>
         </div>
@@ -658,6 +740,9 @@ onMounted(() => {
                 @click.stop="handleDownload(entry)"
                 :disabled="entry.dir"
                 >下载</el-button
+              >
+              <el-button link size="small" @click.stop="openShare(entry)"
+                >分享</el-button
               >
               <el-button link size="small" @click.stop="openMove(entry)"
                 >移动</el-button
@@ -906,6 +991,44 @@ onMounted(() => {
       <template #footer>
         <el-button @click="moveDialog = false">取消</el-button>
         <el-button type="primary" @click="handleMove">移动</el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 分享 -->
+    <el-dialog v-model="shareDialog" title="分享" width="480px">
+      <el-form v-if="!shareResult" label-width="80px">
+        <el-form-item label="访问密码">
+          <el-input
+            v-model="sharePassword"
+            placeholder="留空表示无需密码"
+          />
+        </el-form-item>
+        <el-form-item label="有效期">
+          <el-select v-model="shareExpireDays">
+            <el-option label="永久" :value="0" />
+            <el-option label="1 天" :value="1" />
+            <el-option label="7 天" :value="7" />
+            <el-option label="30 天" :value="30" />
+          </el-select>
+        </el-form-item>
+      </el-form>
+      <div v-else>
+        <el-alert type="success" :closable="false" title="分享链接已生成" />
+        <div style="margin: 12px 0">
+          <el-input :model-value="shareUrl" readonly />
+        </div>
+      </div>
+      <template #footer>
+        <template v-if="!shareResult">
+          <el-button @click="shareDialog = false">取消</el-button>
+          <el-button type="primary" @click="handleCreateShare"
+            >生成链接</el-button
+          >
+        </template>
+        <template v-else>
+          <el-button @click="shareDialog = false">关闭</el-button>
+          <el-button type="primary" @click="copyShareUrl">复制链接</el-button>
+        </template>
       </template>
     </el-dialog>
   </div>

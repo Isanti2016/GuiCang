@@ -1,6 +1,7 @@
 import {
   del,
   downloadBlob,
+  downloadBlobPost,
   get,
   getToken,
   post,
@@ -53,6 +54,11 @@ export function writeText(path: string, content: string): Promise<void> {
 
 export function searchFiles(q: string): Promise<FileEntry[]> {
   return get<FileEntry[]>("/files/search", { q });
+}
+
+/** 全文检索（匹配 md/txt 内容）。 */
+export function searchContent(q: string): Promise<FileEntry[]> {
+  return get<FileEntry[]>("/files/search-content", { q });
 }
 
 /** 递归收集图片/视频（相册数据源）。 */
@@ -118,4 +124,10 @@ export async function downloadFileAsBlob(path: string): Promise<void> {
 /** 批量删除（软删除进回收站）。 */
 export function batchDelete(paths: string[], recursive = false): Promise<void> {
   return post<void>("/files/batch-delete", { paths, recursive });
+}
+
+/** 批量打包下载（zip）。 */
+export async function downloadZip(paths: string[]): Promise<void> {
+  const blob = await downloadBlobPost("/files/zip", paths);
+  saveBlob(blob, "guicang-download.zip");
 }
