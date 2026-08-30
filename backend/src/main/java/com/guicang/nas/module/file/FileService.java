@@ -1,6 +1,7 @@
 package com.guicang.nas.module.file;
 
 import com.guicang.nas.infra.storage.FileEntry;
+import com.guicang.nas.module.file.dto.DuplicateGroup;
 import com.guicang.nas.module.file.dto.FileStreamInfo;
 import java.util.List;
 import org.springframework.web.multipart.MultipartFile;
@@ -61,6 +62,15 @@ public interface FileService {
 
   /** 全文检索（匹配 md/txt 内容 + 权限过滤）。 */
   List<FileEntry> searchContent(String keyword);
+
+  /** 查找重复文件（相同大小 + 相同 SHA-256）。 */
+  List<DuplicateGroup> findDuplicates(String path);
+
+  /** 某文件的历史版本列表（倒序）。 */
+  List<FileVersion> listVersions(String path);
+
+  /** 回滚到指定历史版本。 */
+  void restoreVersion(Long id);
 
   /** 递归收集目录下图片/视频（相册数据源；需 READ 权限；限制深度与数量）。 */
   /** 批量打包下载（zip；需 READ 权限）。 */

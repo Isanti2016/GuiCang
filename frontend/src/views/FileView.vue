@@ -14,6 +14,9 @@ import {
   deleteFile,
   downloadFileAsBlob,
   downloadZip,
+  findDuplicates,
+  listVersions,
+  restoreVersion,
   listFiles,
   mkdir,
   moveFile,
@@ -25,6 +28,8 @@ import {
   thumbnailUrl,
   uploadWithProgress,
   writeText,
+  type DuplicateGroup,
+  type FileVersion,
   type FileEntry,
 } from "@/api/file";
 import { createShare, type ShareVO } from "@/api/share";
@@ -331,6 +336,13 @@ const shareTarget = ref<FileEntry | null>(null);
 const sharePassword = ref("");
 const shareExpireDays = ref(0);
 const shareResult = ref<ShareVO | null>(null);
+const duplicateDialog = ref(false);
+const duplicateLoading = ref(false);
+const duplicateGroups = ref<DuplicateGroup[]>([]);
+const versionDialog = ref(false);
+const versionLoading = ref(false);
+const versions = ref<FileVersion[]>([]);
+const versionPath = ref("");
 const shareUrl = computed(() =>
   shareResult.value
     ? `${window.location.origin}/api/v1/shares/${shareResult.value.token}/download`
@@ -416,6 +428,67 @@ async function copyShareUrl(): Promise<void> {
   } catch {
     ElMessage.error("复制失败，请手动复制");
   }
+}
+
+/** 打开重复文件扫描。 */
+async function openDuplicates(): Promise<void> {
+  duplicateDialog.value = true;
+  duplicateGroups.value = [];
+  await handleFindDuplicates();
+}
+
+/** 扫描重复文件。 */
+async function handleFindDuplicates(): Promise<void> {
+  duplicateLoading.value = true;
+  try {
+    duplicateGroups.value = await findDuplicates(currentDir.value);
+  } catch {
+    ElMessage.error("扫描重复文件失败");
+  } finally {
+    duplicateLoading.value = false;
+  }
+}
+
+/** 删除重复文件并重新扫描。 */
+async function handleDeleteDuplicate(entry: FileEntry): Promise<void> {
+  await handleDelete([entry]);
+  await handleFindDuplicates();
+}
+
+/** 打开历史版本弹窗。 */
+async function openVersions(): Promise<void> {
+  if (!previewEntry.value) return;
+  versionPath.value = previewEntry.value.path;
+  versionDialog.value = true;
+  versions.value = [];
+  await loadVersions();
+}
+
+/** 加载历史版本。 */
+async function loadVersions(): Promise<void> {
+  versionLoading.value = true;
+  try {
+    versions.value = await listVersions(versionPath.value);
+  } catch {
+    ElMessage.error("加载历史版本失败");
+  } finally {
+    versionLoading.value = false;
+  }
+}
+
+/** 回滚到指定历史版本。 */
+async function handleRestoreVersion(v: FileVersion): Promise<void> {
+  await ElMessageBox.confirm("回滚到该版本？当前内容会先留档。", "回滚确认", {
+    type: "warning",
+  });
+  await restoreVersion(v.id);
+  ElMessage.success("已回滚");
+  if (previewEntry.value) {
+    const text = await readText(previewEntry.value.path);
+    previewText.value = text;
+    editingText.value = text;
+  }
+  await loadVersions();
 }
 
 // ============ 下载 ============
@@ -634,6 +707,7 @@ onMounted(() => {
           <el-button size="small" type="primary" @click="uploadDialog = true">
             <el-icon><Upload /></el-icon>上传
           </el-button>
+          <el-button size="small" @click="openDuplicates">查找重复</el-button>
         </div>
       </div>
 
@@ -888,6 +962,12 @@ onMounted(() => {
               @click="enterEdit"
               >编辑</el-button
             >
+            <el-button
+              v-if="previewMode === 'view'"
+              size="small"
+              @click="openVersions"
+              >历史</el-button
+            >
             <template v-else>
               <el-button size="small" type="success" @click="handleSave"
                 >保存</el-button
@@ -1029,6 +1109,73 @@ onMounted(() => {
           <el-button @click="shareDialog = false">关闭</el-button>
           <el-button type="primary" @click="copyShareUrl">复制链接</el-button>
         </template>
+      </template>
+    </el-dialog>
+
+    <!-- 重复文件 -->
+    <el-dialog v-model="duplicateDialog" title="重复文件" width="680px">
+      <div v-loading="duplicateLoading" class="file-manager__dup">
+        <el-empty
+          v-if="!duplicateLoading && duplicateGroups.length === 0"
+          description="未发现重复文件"
+        />
+        <el-collapse v-else>
+          <el-collapse-item
+            v-for="group in duplicateGroups"
+            :key="group.hash"
+            :title="`${group.files.length} 个重复 · ${formatSize(group.size)}`"
+          >
+            <div
+              v-for="f in group.files"
+              :key="f.path"
+              class="file-manager__dup-row"
+            >
+              <span class="file-manager__dup-path">{{ f.path }}</span>
+              <el-button
+                link
+                type="danger"
+                size="small"
+                @click="handleDeleteDuplicate(f)"
+                >删除</el-button
+              >
+            </div>
+          </el-collapse-item>
+        </el-collapse>
+      </div>
+      <template #footer>
+        <el-button @click="duplicateDialog = false">关闭</el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 历史版本 -->
+    <el-dialog v-model="versionDialog" title="历史版本" width="560px">
+      <div v-loading="versionLoading">
+        <el-empty
+          v-if="!versionLoading && versions.length === 0"
+          description="暂无历史版本"
+        />
+        <el-table v-else :data="versions" size="small" max-height="400">
+          <el-table-column label="保存时间" width="170">
+            <template #default="{ row }">{{ formatTime(row.createdAt) }}</template>
+          </el-table-column>
+          <el-table-column label="大小" width="110">
+            <template #default="{ row }">{{ formatSize(row.size) }}</template>
+          </el-table-column>
+          <el-table-column label="操作" width="90">
+            <template #default="{ row }">
+              <el-button
+                link
+                type="primary"
+                size="small"
+                @click="handleRestoreVersion(row)"
+                >回滚</el-button
+              >
+            </template>
+          </el-table-column>
+        </el-table>
+      </div>
+      <template #footer>
+        <el-button @click="versionDialog = false">关闭</el-button>
       </template>
     </el-dialog>
   </div>

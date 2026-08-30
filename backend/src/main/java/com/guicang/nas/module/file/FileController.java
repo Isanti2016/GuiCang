@@ -2,6 +2,7 @@ package com.guicang.nas.module.file;
 
 import com.guicang.nas.common.Result;
 import com.guicang.nas.infra.storage.FileEntry;
+import com.guicang.nas.module.file.dto.DuplicateGroup;
 import com.guicang.nas.module.file.dto.FileBatchDeleteRequest;
 import com.guicang.nas.module.file.dto.FileMoveRequest;
 import com.guicang.nas.module.file.dto.FilePathRequest;
@@ -21,6 +22,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -228,6 +230,31 @@ public class FileController {
   @GetMapping("/search-content")
   public Result<List<FileEntry>> searchContent(@RequestParam(required = false) String q) {
     return Result.ok(fileService.searchContent(q));
+  }
+
+  /**
+   * 查找重复文件（相同大小 + 相同 SHA-256）。
+   */
+  @GetMapping("/duplicates")
+  public Result<List<DuplicateGroup>> duplicates(@RequestParam(defaultValue = "") String path) {
+    return Result.ok(fileService.findDuplicates(path));
+  }
+
+  /**
+   * 文件历史版本列表。
+   */
+  @GetMapping("/versions")
+  public Result<List<FileVersion>> versions(@RequestParam @NotBlank String path) {
+    return Result.ok(fileService.listVersions(path));
+  }
+
+  /**
+   * 回滚到指定历史版本。
+   */
+  @PostMapping("/versions/{id}/restore")
+  public Result<Void> restoreVersion(@PathVariable Long id) {
+    fileService.restoreVersion(id);
+    return Result.ok();
   }
 
   /**

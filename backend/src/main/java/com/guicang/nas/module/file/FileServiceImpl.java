@@ -10,6 +10,7 @@ import com.guicang.nas.infra.storage.FileEntry;
 import com.guicang.nas.infra.storage.FileTypeUtils;
 import com.guicang.nas.infra.storage.StorageService;
 import com.guicang.nas.infra.thumbnail.ThumbnailService;
+import com.guicang.nas.module.file.dto.DuplicateGroup;
 import com.guicang.nas.module.file.dto.FileStreamInfo;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -18,6 +19,11 @@ import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 import java.util.zip.ZipEntry;
+import java.io.InputStream;
+import java.security.MessageDigest;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.zip.ZipOutputStream;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -38,6 +44,7 @@ public class FileServiceImpl implements FileService {
   private final ThumbnailService thumbnailService;
   private final FileIndexService fileIndexService;
   private final TrashItemMapper trashItemMapper;
+  private final FileVersionMapper fileVersionMapper;
 
   @Value("${guicang.file.max-upload-size-bytes:1073741824}")
   private long maxUploadSizeBytes;
@@ -56,12 +63,14 @@ public class FileServiceImpl implements FileService {
       DirPermissionService dirPermissionService,
       ThumbnailService thumbnailService,
       FileIndexService fileIndexService,
-      TrashItemMapper trashItemMapper) {
+      TrashItemMapper trashItemMapper,
+      FileVersionMapper fileVersionMapper) {
     this.storageService = storageService;
     this.dirPermissionService = dirPermissionService;
     this.thumbnailService = thumbnailService;
     this.fileIndexService = fileIndexService;
     this.trashItemMapper = trashItemMapper;
+    this.fileVersionMapper = fileVersionMapper;
   }
 
   /**
@@ -385,6 +394,7 @@ public class FileServiceImpl implements FileService {
     AuthenticatedUser user = requireUser();
     dirPermissionService.check(user.username(), authorities(), path, DirPerm.WRITE);
     requireTextExtension(path);
+    saveVersion(path, user.username());
     storageService.writeText(path, content);
     // 内容变更后重建索引（大小/时间戳刷新）
     FileEntry entry = findEntry(path);
@@ -551,6 +561,147 @@ public class FileServiceImpl implements FileService {
       return new FileStreamInfo(thumb, Files.size(thumb), "image/jpeg", "thumb.jpg");
     } catch (IOException e) {
       throw new BizException("读取缩略图失败: " + path);
+    }
+  }
+
+  /**
+   * 查找重复文件（相同大小 + 相同 SHA-256 哈希）。
+   */
+  @Override
+  @Audit(action = "file.duplicates", resource = "#path")
+  public List<DuplicateGroup> findDuplicates(String path) {
+    AuthenticatedUser user = requireUser();
+    dirPermissionService.check(user.username(), authorities(), path, DirPerm.READ);
+    List<FileEntry> files = new ArrayList<>();
+    collectAllFiles(path, 0, files, user.username());
+    Map<Long, List<FileEntry>> bySize = new HashMap<>();
+    for (FileEntry f : files) {
+      if (f.size() > 0) {
+        bySize.computeIfAbsent(f.size(), k -> new ArrayList<>()).add(f);
+      }
+    }
+    List<DuplicateGroup> result = new ArrayList<>();
+    for (Map.Entry<Long, List<FileEntry>> e : bySize.entrySet()) {
+      if (e.getValue().size() < 2) {
+        continue;
+      }
+      Map<String, List<FileEntry>> byHash = new HashMap<>();
+      for (FileEntry f : e.getValue()) {
+        byHash.computeIfAbsent(sha256File(f.path()), k -> new ArrayList<>()).add(f);
+      }
+      for (Map.Entry<String, List<FileEntry>> h : byHash.entrySet()) {
+        if (h.getValue().size() >= 2) {
+          result.add(new DuplicateGroup(e.getKey(), h.getKey(), h.getValue()));
+        }
+      }
+    }
+    return result;
+  }
+
+  private static final int DUP_MAX_DEPTH = 10;
+  private static final int DUP_MAX_COUNT = 50000;
+
+  private void collectAllFiles(String dir, int depth, List<FileEntry> out, String username) {
+    if (depth > DUP_MAX_DEPTH || out.size() >= DUP_MAX_COUNT) {
+      return;
+    }
+    for (FileEntry entry : storageService.list(dir)) {
+      if (out.size() >= DUP_MAX_COUNT) {
+        return;
+      }
+      if (TRASH_DIR.equals(entry.name()) || entry.path().startsWith(TRASH_DIR + "/")) {
+        continue;
+      }
+      if (!dirPermissionService.has(username, authorities(), entry.path(), DirPerm.READ)) {
+        continue;
+      }
+      if (entry.dir()) {
+        collectAllFiles(entry.path(), depth + 1, out, username);
+      } else {
+        out.add(entry);
+      }
+    }
+  }
+
+  private String sha256File(String path) {
+    try (InputStream in = Files.newInputStream(storageService.resolveFile(path))) {
+      MessageDigest md = MessageDigest.getInstance("SHA-256");
+      byte[] buf = new byte[8192];
+      int n;
+      while ((n = in.read(buf)) != -1) {
+        md.update(buf, 0, n);
+      }
+      StringBuilder sb = new StringBuilder(64);
+      for (byte b : md.digest()) {
+        sb.append(String.format("%02x", b));
+      }
+      return sb.toString();
+    } catch (Exception e) {
+      return "";
+    }
+  }
+
+  /**
+   * 某文件的历史版本列表（倒序）。
+   */
+  @Override
+  public List<FileVersion> listVersions(String path) {
+    AuthenticatedUser user = requireUser();
+    dirPermissionService.check(user.username(), authorities(), path, DirPerm.READ);
+    return fileVersionMapper.selectList(
+        new LambdaQueryWrapper<FileVersion>()
+            .eq(FileVersion::getPath, path)
+            .orderByDesc(FileVersion::getCreatedAt));
+  }
+
+  /**
+   * 回滚到指定历史版本。
+   */
+  @Override
+  @Audit(action = "file.restore-version", resource = "#id")
+  public void restoreVersion(Long id) {
+    AuthenticatedUser user = requireUser();
+    FileVersion v = fileVersionMapper.selectById(id);
+    if (v == null) {
+      throw new BizException("历史版本不存在");
+    }
+    dirPermissionService.check(user.username(), authorities(), v.getPath(), DirPerm.WRITE);
+    saveVersion(v.getPath(), user.username());
+    storageService.writeText(v.getPath(), v.getContent());
+    FileEntry entry = findEntry(v.getPath());
+    if (entry != null) {
+      indexEntry(entry, user.username());
+    }
+  }
+
+  private static final int MAX_VERSIONS_PER_FILE = 20;
+
+  private void saveVersion(String path, String username) {
+    try {
+      String old = storageService.readText(path, maxTextSizeBytes);
+      if (old == null || old.isBlank()) {
+        return;
+      }
+      FileVersion v = new FileVersion();
+      v.setPath(path);
+      v.setContent(old);
+      v.setSize((long) old.length());
+      v.setCreatedBy(username);
+      v.setCreatedAt(System.currentTimeMillis());
+      fileVersionMapper.insert(v);
+      trimVersions(path);
+    } catch (Exception e) {
+      log.debug("保存历史版本失败: {}", path);
+    }
+  }
+
+  private void trimVersions(String path) {
+    List<FileVersion> versions = fileVersionMapper.selectList(
+        new LambdaQueryWrapper<FileVersion>()
+            .eq(FileVersion::getPath, path)
+            .orderByDesc(FileVersion::getCreatedAt));
+    for (int i = MAX_VERSIONS_PER_FILE; i < versions.size(); i++) {
+      fileVersionMapper.deleteById(versions.get(i).getId());
     }
   }
 

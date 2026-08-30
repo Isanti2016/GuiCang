@@ -61,6 +61,38 @@ export function searchContent(q: string): Promise<FileEntry[]> {
   return get<FileEntry[]>("/files/search-content", { q });
 }
 
+/** 重复文件分组（与后端 DuplicateGroup 对应）。 */
+export interface DuplicateGroup {
+  size: number;
+  hash: string;
+  files: FileEntry[];
+}
+
+/** 查找重复文件（相同大小 + 相同 SHA-256）。 */
+export function findDuplicates(path: string): Promise<DuplicateGroup[]> {
+  return get<DuplicateGroup[]>("/files/duplicates", { path });
+}
+
+/** 文件历史版本（与后端 FileVersion 对应）。 */
+export interface FileVersion {
+  id: number;
+  path: string;
+  content: string;
+  size: number | null;
+  createdBy: string;
+  createdAt: number;
+}
+
+/** 某文件的历史版本列表。 */
+export function listVersions(path: string): Promise<FileVersion[]> {
+  return get<FileVersion[]>("/files/versions", { path });
+}
+
+/** 回滚到指定历史版本。 */
+export function restoreVersion(id: number): Promise<void> {
+  return post<void>(`/files/versions/${id}/restore`);
+}
+
 /** 递归收集图片/视频（相册数据源）。 */
 export function fetchMedia(path = ""): Promise<FileEntry[]> {
   return get<FileEntry[]>("/files/media", { path });
