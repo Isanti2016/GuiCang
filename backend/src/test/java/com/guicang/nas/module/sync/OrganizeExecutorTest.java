@@ -83,15 +83,20 @@ class OrganizeExecutorTest {
     Files.createDirectories(tempRoot.resolve("inbox"));
     Files.writeString(tempRoot.resolve("inbox/a.jpg"), "x");
     Files.writeString(tempRoot.resolve("inbox/b.md"), "y");
+    Files.writeString(tempRoot.resolve("inbox/song.mp3"), "z");
+    Files.writeString(tempRoot.resolve("inbox/report.pdf"), "w");
 
     SyncTask t = task("organize", "inbox", "lib", "kind", "copy", "rename");
     OrganizeResult result = executor.execute(t, new KindOrganizeRule());
 
-    assertThat(result.succeeded()).isEqualTo(2);
+    assertThat(result.succeeded()).isEqualTo(4);
     // copy 后源仍在
     assertThat(Files.exists(tempRoot.resolve("inbox/a.jpg"))).isTrue();
     assertThat(Files.exists(tempRoot.resolve("lib/image/a.jpg"))).isTrue();
     assertThat(Files.exists(tempRoot.resolve("lib/note/b.md"))).isTrue();
+    // 音频归 audio、文档归 document（新增分类）
+    assertThat(Files.exists(tempRoot.resolve("lib/audio/song.mp3"))).isTrue();
+    assertThat(Files.exists(tempRoot.resolve("lib/document/report.pdf"))).isTrue();
     // 索引同步（copy → upsert 新路径，源索引仍在）
     assertThat(
             fileIndexMapper.selectList(null).stream()
