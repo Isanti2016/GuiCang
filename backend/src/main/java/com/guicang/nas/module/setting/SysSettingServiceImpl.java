@@ -22,7 +22,11 @@ public class SysSettingServiceImpl implements SysSettingService {
   private final SysConfigMapper sysConfigMapper;
 
   /** 已注册设置项（新增设置在此扩展）。 */
-  private static final List<SysSetting> DEFINITIONS = List.of(SysSetting.TRASH_AUTO_PURGE_DAYS);
+  private static final List<SysSetting> DEFINITIONS =
+      List.of(
+          SysSetting.TRASH_AUTO_PURGE_DAYS,
+          SysSetting.DISK_ALERT_THRESHOLD,
+          SysSetting.CAMERA_RECEIVE_DIR);
 
   public SysSettingServiceImpl(SysConfigMapper sysConfigMapper) {
     this.sysConfigMapper = sysConfigMapper;

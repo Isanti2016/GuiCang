@@ -79,6 +79,7 @@ const menuGroups = computed<MenuGroup[]>(() => {  const groups: MenuGroup[] = [
       items: [
         { path: "/files", title: "文件管理", icon: "Folder" },
         { path: "/gallery", title: "相册", icon: "Picture" },
+        { path: "/cameras", title: "监控录像", icon: "VideoCamera" },
         { path: "/trash", title: "回收站", icon: "Delete" },
       ],
     },

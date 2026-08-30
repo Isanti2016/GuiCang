@@ -47,6 +47,8 @@ async function handleSave(): Promise<void> {
 function hintOf(key: string): string {
   const hints: Record<string, string> = {
     "trash.auto-purge-days": "回收站中超过该天数的条目将被每天 02:00 自动彻底删除；0 表示不自动清空",
+    "camera.receive-dir": "监控录像接收目录：摄像头录像放入该目录（子目录名=摄像头名），系统每 5 分钟自动按摄像头/日期归档；留空=存储根/cameras/incoming",
+    "disk.alert-threshold": "磁盘使用率超过该百分比时生成站内告警通知；0 表示不告警",
   };
   return hints[key] ?? "";
 }

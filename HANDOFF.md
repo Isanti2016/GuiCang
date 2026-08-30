@@ -24,7 +24,7 @@
 - 部署配置：Dockerfile、compose（nginx/backend/redis）、nginx 反代（Range/1100m）、logback 滚动文件日志
 - 测试/文档：JaCoCo 80.8%（核心 Service 全达标）、Vitest 冒烟+权限矩阵、docs/压测报告.md（读 600+ req/s 基线）、README/HANDOFF/手册实施记录
 
-## 最近一轮新增功能（2026-08-30 夜间，17 项增强，已提交推送）
+## 最近一轮新增功能（2026-08-30 夜间，18 项增强，已提交推送）
 - 打包下载：多选/目录 zip 打包下载（/files/zip，临时 zip 1h 自清）
 - 分享链接：文件/目录分享（token + 密码 SHA-256 + 过期），免登录下载（/shares/{token}/download）
 - 全文检索：md/txt 内容索引（file_index.content 列）+ /files/search-content，前端搜索合并名称+内容
@@ -39,6 +39,8 @@
 - 分片上传：>50MB 自动分片（5MB/片）+ 合并（/files/chunk + /files/chunk/complete）
 - 文件收藏：星标收藏 + 收藏列表（favorite 表）
 - WebDAV：Basic Auth（PAM）+ PROPFIND/GET/PUT/MKCOL/DELETE/MOVE（/dav/**），第三方客户端直接挂载
+- 监控录像：接收目录（可配置）→ 每 5 分钟自动归档 cameras/archive/{摄像头}/{日期}/（camera 表自动注册 + 文件名日期解析 + 冲突后缀），Web 端监控录像页按摄像头/日期浏览播放
+- 另：修复磁盘告警阈值设置项未注册问题（disk.alert-threshold 现可在系统设置调整）；新增 docs/手机相册备份接入指南.md 与 docs/移动端App方案.md
 - 另：移除 ELK 日志链路（logback 滚动文件）；自动整理补齐 audio/document 分类
 
 ## 待用户确认执行（下一步，均不触碰 /home/wb/nas 现有数据）
