@@ -24,11 +24,22 @@
 - 部署配置：Dockerfile、compose（nginx/backend/redis）、nginx 反代（Range/1100m）、logback 滚动文件日志
 - 测试/文档：JaCoCo 80.8%（核心 Service 全达标）、Vitest 冒烟+权限矩阵、docs/压测报告.md（读 600+ req/s 基线）、README/HANDOFF/手册实施记录
 
-## 最近一轮新增功能（家庭 NAS 增强，已提交推送）
-- 回收站：文件删除改为软删除（移入 .guicang-trash），回收站列表/恢复/彻底删除/清空（TrashController + V5__trash.sql + TrashView.vue）
-- 修改本人密码：PUT /auth/password（校验旧密码后经系统账号改密），MainLayout 下拉弹窗
-- 相册：后端 media() 递归收集图片/视频，前端 GalleryView 瀑布流 + 灯箱预览（键盘翻页/类型筛选）
-- 大屏增强：DashboardSummary.userStorage（按 personal/<user>/ 聚合）、文件类型分布饼图 + 用户存储条图
+## 最近一轮新增功能（2026-08-30 夜间，17 项增强，已提交推送）
+- 打包下载：多选/目录 zip 打包下载（/files/zip，临时 zip 1h 自清）
+- 分享链接：文件/目录分享（token + 密码 SHA-256 + 过期），免登录下载（/shares/{token}/download）
+- 全文检索：md/txt 内容索引（file_index.content 列）+ /files/search-content，前端搜索合并名称+内容
+- 重复文件检测：size + SHA-256 分组找重复（/files/duplicates），前端可删
+- 文件版本历史：md/txt 编辑留档（file_version 表，保留 20 版）+ 回滚（/files/versions）
+- 磁盘告警 + 通知中心：DiskAlertJob 磁盘使用率超阈值告警（24h 去重）+ 站内通知（notification 表）+ 顶部铃铛
+- 磁盘配额拦截：上传时校验用户已用空间 vs quota_bytes（sumSizeByPrefix）
+- 同步失败告警：SyncRunJob 失败/部分失败生成站内通知
+- 相册时间线：GalleryView 网格/时间线切换，按日期分组倒序
+- 登录会话管理：登录记录会话（token SHA-256 + ip + UA），会话列表 + 踢下线（JWT 黑名单）
+- 两步验证：TOTP（自写 HMAC-SHA1 + Base32，无第三方依赖），登录校验 + 开启/关闭
+- 分片上传：>50MB 自动分片（5MB/片）+ 合并（/files/chunk + /files/chunk/complete）
+- 文件收藏：星标收藏 + 收藏列表（favorite 表）
+- WebDAV：Basic Auth（PAM）+ PROPFIND/GET/PUT/MKCOL/DELETE/MOVE（/dav/**），第三方客户端直接挂载
+- 另：移除 ELK 日志链路（logback 滚动文件）；自动整理补齐 audio/document 分类
 
 ## 待用户确认执行（下一步，均不触碰 /home/wb/nas 现有数据）
 1. `sudo ./scripts/install-helper.sh`（建组/服务账号/装 helper/sudoers）——可先 --dry-run
