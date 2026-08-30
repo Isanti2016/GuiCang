@@ -14,6 +14,9 @@ public interface FileIndexService {
   /** 重命名/移动后更新路径。 */
   void rename(String oldPath, String newPath);
 
+  /** 路径是否存在索引。 */
+  boolean exists(String relativePath);
+
   /** 按名称关键字搜索（LIKE 匹配 name）。 */
   List<FileIndex> search(String keyword);
 

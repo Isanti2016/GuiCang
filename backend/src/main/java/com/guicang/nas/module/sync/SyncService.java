@@ -1,5 +1,6 @@
 package com.guicang.nas.module.sync;
 
+import com.guicang.nas.module.sync.dto.SyncTaskRequest;
 import java.util.List;
 
 /** 同步任务服务：任务 CRUD、立即执行、历史查询。 */
@@ -9,10 +10,10 @@ public interface SyncService {
   List<SyncTask> listTasks();
 
   /** 新建任务（注册定时调度）。 */
-  SyncTask createTask(String name, String sourceConfig, String cron);
+  SyncTask createTask(SyncTaskRequest request);
 
   /** 编辑任务（重新调度）。 */
-  SyncTask updateTask(Long id, String name, String sourceConfig, String cron, boolean enabled);
+  SyncTask updateTask(Long id, boolean enabled, SyncTaskRequest request);
 
   /** 删除任务（取消调度）。 */
   void deleteTask(Long id);

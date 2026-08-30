@@ -43,13 +43,12 @@ public class SyncController {
   /**
    * 新建任务。
    *
-   * @param request 新建任务请求体（名称 + 源配置 + cron 表达式）
+   * @param request 新建任务请求体（名称 + 源/目标 + 规则 + cron）
    * @return 新建的同步任务
    */
   @PostMapping("/tasks")
   public Result<SyncTask> create(@Valid @RequestBody SyncTaskRequest request) {
-    return Result.ok(
-        syncService.createTask(request.name(), request.sourceConfig(), request.cron()));
+    return Result.ok(syncService.createTask(request));
   }
 
   /**
@@ -57,7 +56,7 @@ public class SyncController {
    *
    * @param id 任务 ID
    * @param enabled 是否启用
-   * @param request 任务编辑请求体（名称 + 源配置 + cron 表达式）
+   * @param request 任务编辑请求体（名称 + 源/目标 + 规则 + cron）
    * @return 更新后的同步任务
    */
   @PutMapping("/tasks/{id}")
@@ -65,9 +64,7 @@ public class SyncController {
       @PathVariable @NotNull Long id,
       @RequestParam(defaultValue = "true") boolean enabled,
       @Valid @RequestBody SyncTaskRequest request) {
-    return Result.ok(
-        syncService.updateTask(
-            id, request.name(), request.sourceConfig(), request.cron(), enabled));
+    return Result.ok(syncService.updateTask(id, enabled, request));
   }
 
   /**

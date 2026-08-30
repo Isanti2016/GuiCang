@@ -5,7 +5,18 @@ export interface SyncTask {
   id: number;
   name: string;
   sourceType: string;
+  /** index_scan（索引扫描）/ organize（自动整理）。 */
+  taskType: string;
   sourceConfig: string;
+  /** 目标目录（自动整理用）。 */
+  targetConfig: string | null;
+  /** date_year / date_month / date_day / kind。 */
+  ruleType: string;
+  ruleConfig: string;
+  /** move / copy。 */
+  action: string;
+  /** skip / overwrite / rename。 */
+  conflict: string;
   cron: string;
   enabled: number;
   lastRunAt: number | null;
@@ -17,13 +28,33 @@ export interface SyncTask {
 export interface SyncHistory {
   id: number;
   taskId: number;
+  taskType: string;
   startedAt: number;
   finishedAt: number | null;
+  /** running / success / partial / failed。 */
   status: string;
+  processed: number;
+  succeeded: number;
+  failed: number;
+  skipped: number;
   added: number;
   updated: number;
   deleted: number;
   error: string | null;
+  details: string | null;
+}
+
+/** 新建/编辑任务请求体。 */
+export interface SyncTaskPayload {
+  name: string;
+  sourceConfig: string;
+  cron: string;
+  taskType?: string;
+  targetConfig?: string;
+  ruleType?: string;
+  ruleConfig?: string;
+  action?: string;
+  conflict?: string;
 }
 
 /** 查询全部同步任务。 */
@@ -32,11 +63,7 @@ export function fetchTasks(): Promise<SyncTask[]> {
 }
 
 /** 新建同步任务。 */
-export function createTask(data: {
-  name: string;
-  sourceConfig: string;
-  cron: string;
-}): Promise<SyncTask> {
+export function createTask(data: SyncTaskPayload): Promise<SyncTask> {
   return post<SyncTask>("/sync/tasks", data);
 }
 
@@ -44,7 +71,7 @@ export function createTask(data: {
 export function updateTask(
   id: number,
   enabled: boolean,
-  data: { name: string; sourceConfig: string; cron: string },
+  data: SyncTaskPayload,
 ): Promise<SyncTask> {
   return put<SyncTask>(`/sync/tasks/${id}`, data, { enabled });
 }

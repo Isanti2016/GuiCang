@@ -5,6 +5,7 @@ import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -177,6 +178,123 @@ class SyncApiTest {
     mockMvc
         .perform(get("/api/v1/sync/tasks").header("Authorization", bearer(memberToken)))
         .andExpect(status().isForbidden());
+  }
+
+  @Test
+  void 创建自动整理任务并立即执行移动文件() throws Exception {
+    Files.createDirectories(tempRoot.resolve("inbox-a"));
+    Files.writeString(tempRoot.resolve("inbox-a/photo.jpg"), "x");
+
+    MvcResult create =
+        mockMvc
+            .perform(
+                post("/api/v1/sync/tasks")
+                    .header("Authorization", bearer(adminToken))
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(
+                        "{\"name\":\"照片整理\",\"sourceConfig\":\"inbox-a\","
+                            + "\"targetConfig\":\"photos\",\"taskType\":\"organize\","
+                            + "\"ruleType\":\"kind\",\"action\":\"move\",\"conflict\":\"rename\","
+                            + "\"cron\":\"0 0 3 * * ?\"}"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.taskType").value("organize"))
+            .andReturn();
+
+    long taskId =
+        objectMapper
+            .readTree(create.getResponse().getContentAsString())
+            .path("data")
+            .path("id")
+            .asLong();
+
+    mockMvc
+        .perform(
+            post("/api/v1/sync/tasks/{id}/run", taskId).header("Authorization", bearer(adminToken)))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.data.status").value("success"))
+        .andExpect(jsonPath("$.data.succeeded").value(1))
+        .andExpect(jsonPath("$.data.processed").value(1));
+
+    // 文件已移动并建立索引
+    assertThat(Files.exists(tempRoot.resolve("inbox-a/photo.jpg"))).isFalse();
+    assertThat(Files.exists(tempRoot.resolve("photos/image/photo.jpg"))).isTrue();
+    assertThat(
+            fileIndexMapper.selectCount(
+                new LambdaQueryWrapper<FileIndex>()
+                    .eq(FileIndex::getPath, "photos/image/photo.jpg")))
+        .isEqualTo(1);
+  }
+
+  @Test
+  void 自动整理目标为源子目录被拒() throws Exception {
+    mockMvc
+        .perform(
+            post("/api/v1/sync/tasks")
+                .header("Authorization", bearer(adminToken))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(
+                    "{\"name\":\"非法\",\"sourceConfig\":\"media\","
+                        + "\"targetConfig\":\"media/sub\",\"taskType\":\"organize\","
+                        + "\"ruleType\":\"kind\",\"cron\":\"0 0 3 * * ?\"}"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.code").value(ResultCodes.BIZ_ERROR))
+        .andExpect(jsonPath("$.message").value("目标目录不能是源目录或其子目录（防循环整理）"));
+  }
+
+  @Test
+  void 自动整理目标为源子目录带点号被拒() throws Exception {
+    // media/sub/../sub2 规范化后仍是 media/sub2，属 media 子目录 → 应被拒
+    mockMvc
+        .perform(
+            post("/api/v1/sync/tasks")
+                .header("Authorization", bearer(adminToken))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(
+                    "{\"name\":\"非法2\",\"sourceConfig\":\"media\","
+                        + "\"targetConfig\":\"media/sub/../sub2\",\"taskType\":\"organize\","
+                        + "\"ruleType\":\"kind\",\"cron\":\"0 0 3 * * ?\"}"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.code").value(ResultCodes.BIZ_ERROR))
+        .andExpect(jsonPath("$.message").value("目标目录不能是源目录或其子目录（防循环整理）"));
+  }
+
+  @Test
+  void 自动整理编辑保留目标目录() throws Exception {
+    Files.createDirectories(tempRoot.resolve("inbox-b"));
+    Files.writeString(tempRoot.resolve("inbox-b/pic.jpg"), "x");
+    MvcResult create =
+        mockMvc
+            .perform(
+                post("/api/v1/sync/tasks")
+                    .header("Authorization", bearer(adminToken))
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(
+                        "{\"name\":\"整理\",\"sourceConfig\":\"inbox-b\","
+                            + "\"targetConfig\":\"photos\",\"taskType\":\"organize\","
+                            + "\"ruleType\":\"kind\",\"action\":\"move\",\"conflict\":\"rename\","
+                            + "\"cron\":\"0 0 3 * * ?\"}"))
+            .andExpect(status().isOk())
+            .andReturn();
+    long taskId =
+        objectMapper
+            .readTree(create.getResponse().getContentAsString())
+            .path("data")
+            .path("id")
+            .asLong();
+
+    // 编辑时前端可能只传部分字段（targetConfig 为空串），后端应保留原值
+    mockMvc
+        .perform(
+            put("/api/v1/sync/tasks/{id}", taskId)
+                .param("enabled", "true")
+                .header("Authorization", bearer(adminToken))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(
+                    "{\"name\":\"整理\",\"sourceConfig\":\"inbox-b\",\"cron\":\"0 0 4 * * ?\","
+                        + "\"taskType\":\"organize\",\"targetConfig\":\"\",\"ruleType\":\"kind\"}"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.data.targetConfig").value("photos"))
+        .andExpect(jsonPath("$.data.cron").value("0 0 4 * * ?"));
   }
 
   private void insertUser(String username, Long roleId, int enabled) {

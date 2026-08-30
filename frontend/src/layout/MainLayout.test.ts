@@ -41,7 +41,7 @@ describe("MainLayout 菜单权限", () => {
     };
 
     const text = mountLayout(pinia).text();
-    expect(text).toContain("同步任务");
+    expect(text).toContain("自动整理");
     expect(text).toContain("操作记录");
   });
 
@@ -62,7 +62,7 @@ describe("MainLayout 菜单权限", () => {
     expect(text).toContain("文件管理");
     expect(text).toContain("相册");
     expect(text).toContain("回收站");
-    expect(text).not.toContain("同步任务");
+    expect(text).not.toContain("自动整理");
     expect(text).not.toContain("操作记录");
     expect(text).not.toContain("用户管理");
   });

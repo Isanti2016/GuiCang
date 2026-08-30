@@ -99,6 +99,17 @@ public class FileIndexServiceImpl implements FileIndexService {
   }
 
   /**
+   * 路径是否存在索引。
+   *
+   * @param relativePath 相对路径
+   * @return 存在返回 true
+   */
+  @Override
+  public boolean exists(String relativePath) {
+    return findByPath(relativePath) != null;
+  }
+
+  /**
    * 按名称关键字搜索（LIKE 匹配 name 与 path）。
    *
    * @param keyword 搜索关键字

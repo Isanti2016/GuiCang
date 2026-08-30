@@ -16,6 +16,7 @@ import {
   updateTask,
   type SyncHistory,
   type SyncTask,
+  type SyncTaskPayload,
 } from "@/api/sync";
 
 const tasks = ref<SyncTask[]>([]);
@@ -24,11 +25,32 @@ const loading = ref(false);
 const dialogOpen = ref(false);
 const editing = ref<SyncTask | null>(null);
 const formRef = ref<FormInstance>();
-const form = reactive({ name: "", sourceConfig: "", cron: "" });
+const form = reactive({
+  name: "",
+  taskType: "organize",
+  sourceConfig: "",
+  targetConfig: "",
+  ruleType: "date_month",
+  action: "move",
+  conflict: "rename",
+  cron: "0 0 3 * * ?",
+});
 
 const rules: FormRules = {
   name: [{ required: true, message: "请输入任务名", trigger: "blur" }],
   sourceConfig: [{ required: true, message: "请输入源目录", trigger: "blur" }],
+  targetConfig: [
+    {
+      validator: (_rule, _value, callback) => {
+        if (form.taskType === "organize" && !form.targetConfig.trim()) {
+          callback(new Error("自动整理必须填写目标目录"));
+        } else {
+          callback();
+        }
+      },
+      trigger: "blur",
+    },
+  ],
   cron: [{ required: true, message: "请输入 cron 表达式", trigger: "blur" }],
 };
 
@@ -38,6 +60,24 @@ const cronPresets = [
   { label: "每天 00:30", value: "0 30 0 * * ?" },
   { label: "每周日 02:00", value: "0 0 2 ? * SUN" },
   { label: "每 10 分钟", value: "0 0/10 * * * ?" },
+];
+
+const ruleOptions = [
+  { label: "按日期（年/月）", value: "date_month" },
+  { label: "按日期（年）", value: "date_year" },
+  { label: "按日期（年/月/日）", value: "date_day" },
+  { label: "按文件类型", value: "kind" },
+];
+
+const actionOptions = [
+  { label: "移动", value: "move" },
+  { label: "复制", value: "copy" },
+];
+
+const conflictOptions = [
+  { label: "重命名（保留两者）", value: "rename" },
+  { label: "跳过", value: "skip" },
+  { label: "覆盖", value: "overwrite" },
 ];
 
 const historyOpen = ref(false);
@@ -50,7 +90,9 @@ const stat = computed(() => ({
   total: tasks.value.length,
   enabled: tasks.value.filter((t) => t.enabled === 1).length,
   success: tasks.value.filter((t) => t.lastStatus === "success").length,
-  failed: tasks.value.filter((t) => t.lastStatus === "failed").length,
+  failed: tasks.value.filter(
+    (t) => t.lastStatus === "failed" || t.lastStatus === "partial",
+  ).length,
 }));
 
 /** 加载任务列表。 */
@@ -72,12 +114,48 @@ function cronText(cron: string): string {
   }
 }
 
+/** 任务类型中文标签。 */
+function taskTypeLabel(taskType: string | null): string {
+  return taskType === "organize" ? "自动整理" : "索引扫描";
+}
+
+/** 规则中文标签。 */
+function ruleLabel(ruleType: string | null): string {
+  const map: Record<string, string> = {
+    date_year: "按年归档",
+    date_month: "按年月归档",
+    date_day: "按年月日归档",
+    kind: "按类型归档",
+  };
+  return (ruleType && map[ruleType]) || "按年月归档";
+}
+
+/** 操作方式中文标签。 */
+function actionLabel(action: string | null): string {
+  return action === "copy" ? "复制" : "移动";
+}
+
+/** 冲突策略中文标签。 */
+function conflictLabel(conflict: string | null): string {
+  const map: Record<string, string> = {
+    skip: "跳过",
+    overwrite: "覆盖",
+    rename: "重命名",
+  };
+  return (conflict && map[conflict]) || "重命名";
+}
+
 /** 打开新建任务对话框。 */
 function openCreate(): void {
   editing.value = null;
   Object.assign(form, {
     name: "",
+    taskType: "organize",
     sourceConfig: "",
+    targetConfig: "",
+    ruleType: "date_month",
+    action: "move",
+    conflict: "rename",
     cron: cronPresets[0].value,
   });
   dialogOpen.value = true;
@@ -88,10 +166,29 @@ function openEdit(task: SyncTask): void {
   editing.value = task;
   Object.assign(form, {
     name: task.name,
+    taskType: task.taskType || "index_scan",
     sourceConfig: task.sourceConfig,
+    targetConfig: task.targetConfig || "",
+    ruleType: task.ruleType || "date_month",
+    action: task.action || "move",
+    conflict: task.conflict || "rename",
     cron: task.cron,
   });
   dialogOpen.value = true;
+}
+
+/** 组装提交负载。 */
+function buildPayload(): SyncTaskPayload {
+  return {
+    name: form.name,
+    sourceConfig: form.sourceConfig,
+    cron: form.cron,
+    taskType: form.taskType,
+    targetConfig: form.taskType === "organize" ? form.targetConfig : "",
+    ruleType: form.taskType === "organize" ? form.ruleType : "date_month",
+    action: form.taskType === "organize" ? form.action : "move",
+    conflict: form.taskType === "organize" ? form.conflict : "rename",
+  };
 }
 
 /** 提交新建/编辑任务。 */
@@ -99,15 +196,19 @@ async function handleSave(): Promise<void> {
   if (!formRef.value) return;
   const valid = await formRef.value.validate().catch(() => false);
   if (!valid) return;
-  if (editing.value) {
-    await updateTask(editing.value.id, true, { ...form });
-    ElMessage.success("已更新");
-  } else {
-    await createTask({ ...form });
-    ElMessage.success("已创建");
+  try {
+    if (editing.value) {
+      await updateTask(editing.value.id, true, buildPayload());
+      ElMessage.success("已更新");
+    } else {
+      await createTask(buildPayload());
+      ElMessage.success("已创建");
+    }
+    dialogOpen.value = false;
+    await load();
+  } catch {
+    // 后端错误信息已由 http 层提示
   }
-  dialogOpen.value = false;
-  await load();
 }
 
 /** 启用/停用任务。 */
@@ -116,6 +217,11 @@ async function handleToggle(task: SyncTask): Promise<void> {
     name: task.name,
     sourceConfig: task.sourceConfig,
     cron: task.cron,
+    taskType: task.taskType,
+    targetConfig: task.targetConfig || "",
+    ruleType: task.ruleType,
+    action: task.action,
+    conflict: task.conflict,
   });
   ElMessage.success(task.enabled === 0 ? "已启用" : "已停用");
   await load();
@@ -134,10 +240,30 @@ async function handleDelete(task: SyncTask): Promise<void> {
 
 /** 立即执行任务并提示结果。 */
 async function handleRun(task: SyncTask): Promise<void> {
+  // 自动整理 + 移动 = 破坏性操作，先二次确认（需求审查高优先级）
+  if (task.taskType === "organize" && task.action === "move") {
+    await ElMessageBox.confirm(
+      `将把「${task.sourceConfig}」下的文件移动到归档目录，确认执行？`,
+      "确认整理",
+      { type: "warning", confirmButtonText: "执行", cancelButtonText: "取消" },
+    );
+  }
   const result = await runTask(task.id);
-  ElMessage.success(
-    `执行完成：新增 ${result.added} / 更新 ${result.updated} / 删除 ${result.deleted}`,
-  );
+  if (task.taskType === "organize") {
+    const msg =
+      `整理完成：成功 ${result.succeeded} / 失败 ${result.failed} / 跳过 ${result.skipped} / 共 ${result.processed}`;
+    if (result.status === "failed") {
+      ElMessage.error(msg + (result.error ? `（${result.error}）` : ""));
+    } else if (result.status === "partial") {
+      ElMessage.warning(msg);
+    } else {
+      ElMessage.success(msg);
+    }
+  } else {
+    ElMessage.success(
+      `执行完成：新增 ${result.added} / 更新 ${result.updated} / 删除 ${result.deleted}`,
+    );
+  }
   await load();
 }
 
@@ -159,7 +285,9 @@ const formatTime = (ts: number | null): string =>
 
 /** 执行状态码转中文标签。 */
 const statusLabel = (status: string): string =>
-  ({ running: "执行中", success: "成功", failed: "失败" })[status] ?? status;
+  ({ running: "执行中", success: "成功", partial: "部分成功", failed: "失败" })[
+    status
+  ] ?? status;
 
 onMounted(() => {
   void load();
@@ -171,8 +299,8 @@ onMounted(() => {
     <!-- 页面头部 -->
     <div class="sync-view__header">
       <div class="sync-view__header-title">
-        <h2 class="sync-view__heading">同步任务</h2>
-        <span class="sync-view__sub">Quartz 定时扫描 · 自动更新文件索引</span>
+        <h2 class="sync-view__heading">自动整理</h2>
+        <span class="sync-view__sub">定时整理收件箱 · 按规则自动归档文件</span>
       </div>
       <el-button type="primary" @click="openCreate"
         ><el-icon><Plus /></el-icon>新建任务</el-button
@@ -221,7 +349,7 @@ onMounted(() => {
     <div v-loading="loading" class="sync-view__tasks">
       <el-empty
         v-if="!loading && tasks.length === 0"
-        description="暂无同步任务，点击右上角新建"
+        description="暂无任务，点击右上角新建"
       />
 
       <div v-for="task in tasks" :key="task.id" class="sync-view__card">
@@ -232,6 +360,9 @@ onMounted(() => {
               :class="task.enabled === 1 ? 'is-on' : 'is-off'"
             />
             {{ task.name }}
+            <el-tag size="small" class="sync-view__type-tag">{{
+              taskTypeLabel(task.taskType)
+            }}</el-tag>
           </div>
           <div class="sync-view__card-actions">
             <el-button
@@ -272,11 +403,30 @@ onMounted(() => {
 
         <div class="sync-view__card-body">
           <div class="sync-view__field">
-            <span class="sync-view__field-label">源目录</span>
-            <span class="sync-view__field-value">{{
-              task.sourceConfig || "（全根）"
-            }}</span>
+            <span class="sync-view__field-label">路径</span>
+            <span class="sync-view__field-value">
+              <template v-if="task.taskType === 'organize'">
+                {{ task.sourceConfig || "（全根）" }}
+                <span class="sync-view__arrow">→</span>
+                {{ task.targetConfig }}
+              </template>
+              <template v-else>{{ task.sourceConfig || "（全根）" }}</template>
+            </span>
           </div>
+          <template v-if="task.taskType === 'organize'">
+            <div class="sync-view__field">
+              <span class="sync-view__field-label">规则</span>
+              <span class="sync-view__field-value">
+                {{ ruleLabel(task.ruleType) }}
+                <span class="sync-view__rule-tag">{{
+                  actionLabel(task.action)
+                }}</span>
+                <span class="sync-view__rule-tag">{{
+                  conflictLabel(task.conflict)
+                }}</span>
+              </span>
+            </div>
+          </template>
           <div class="sync-view__field">
             <span class="sync-view__field-label">调度</span>
             <span class="sync-view__field-value">
@@ -293,7 +443,13 @@ onMounted(() => {
               <el-tag
                 v-if="task.lastStatus"
                 size="small"
-                :type="task.lastStatus === 'success' ? 'success' : 'danger'"
+                :type="
+                  task.lastStatus === 'success'
+                    ? 'success'
+                    : task.lastStatus === 'partial'
+                      ? 'warning'
+                      : 'danger'
+                "
                 class="sync-view__status-tag"
               >
                 {{ statusLabel(task.lastStatus) }}
@@ -309,13 +465,60 @@ onMounted(() => {
     <el-dialog
       v-model="dialogOpen"
       :title="editing ? '编辑任务' : '新建任务'"
-      width="480px"
+      width="520px"
     >
-      <el-form ref="formRef" :model="form" :rules="rules" label-width="80px">
+      <el-form ref="formRef" :model="form" :rules="rules" label-width="88px">
         <el-form-item label="任务名" prop="name">
-          <el-input v-model="form.name" placeholder="如：照片目录索引" />
+          <el-input v-model="form.name" placeholder="如：照片收件箱整理" />
         </el-form-item>
-        <el-form-item label="源目录" prop="sourceConfig">
+        <el-form-item label="任务类型" prop="taskType">
+          <el-radio-group v-model="form.taskType">
+            <el-radio value="organize">自动整理</el-radio>
+            <el-radio value="index_scan">索引扫描</el-radio>
+          </el-radio-group>
+        </el-form-item>
+        <template v-if="form.taskType === 'organize'">
+          <el-form-item label="源目录" prop="sourceConfig">
+            <el-input
+              v-model="form.sourceConfig"
+              placeholder="收件箱目录，如 media/photos/inbox"
+            />
+          </el-form-item>
+          <el-form-item label="目标目录" prop="targetConfig">
+            <el-input
+              v-model="form.targetConfig"
+              placeholder="归档根目录，如 media/photos"
+            />
+          </el-form-item>
+          <el-form-item label="整理规则" prop="ruleType">
+            <el-select v-model="form.ruleType" style="width: 100%">
+              <el-option
+                v-for="opt in ruleOptions"
+                :key="opt.value"
+                :label="opt.label"
+                :value="opt.value"
+              />
+            </el-select>
+          </el-form-item>
+          <el-form-item label="操作方式" prop="action">
+            <el-radio-group v-model="form.action">
+              <el-radio-button v-for="opt in actionOptions" :key="opt.value" :value="opt.value">
+                {{ opt.label }}
+              </el-radio-button>
+            </el-radio-group>
+          </el-form-item>
+          <el-form-item label="冲突处理" prop="conflict">
+            <el-select v-model="form.conflict" style="width: 100%">
+              <el-option
+                v-for="opt in conflictOptions"
+                :key="opt.value"
+                :label="opt.label"
+                :value="opt.value"
+              />
+            </el-select>
+          </el-form-item>
+        </template>
+        <el-form-item v-else label="源目录" prop="sourceConfig">
           <el-input
             v-model="form.sourceConfig"
             placeholder="存储根下相对路径，如 media/photos；空表示全根"
@@ -352,23 +555,25 @@ onMounted(() => {
     <el-dialog
       v-model="historyOpen"
       :title="`执行历史 · ${historyTask?.name ?? ''}`"
-      width="680px"
+      width="720px"
     >
       <el-table v-loading="historyLoading" :data="history" size="small">
-        <el-table-column label="开始时间" width="170">
+        <el-table-column label="开始时间" width="160">
           <template #default="{ row }">{{
             formatTime(row.startedAt)
           }}</template>
         </el-table-column>
-        <el-table-column label="状态" width="90">
+        <el-table-column label="状态" width="100">
           <template #default="{ row }">
             <el-tag
               :type="
                 row.status === 'success'
                   ? 'success'
-                  : row.status === 'failed'
-                    ? 'danger'
-                    : 'warning'
+                  : row.status === 'partial'
+                    ? 'warning'
+                    : row.status === 'failed'
+                      ? 'danger'
+                      : 'info'
               "
               size="small"
             >
@@ -376,27 +581,41 @@ onMounted(() => {
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="新增" width="70">
-          <template #default="{ row }"
-            ><span style="color: #67e8a0">{{ row.added }}</span></template
-          >
-        </el-table-column>
-        <el-table-column label="更新" width="70">
-          <template #default="{ row }"
-            ><span style="color: #6ec8ff">{{ row.updated }}</span></template
-          >
-        </el-table-column>
-        <el-table-column label="删除" width="70">
-          <template #default="{ row }"
-            ><span style="color: #f5a3a3">{{ row.deleted }}</span></template
-          >
-        </el-table-column>
         <el-table-column
-          prop="error"
-          label="错误"
-          min-width="120"
-          show-overflow-tooltip
-        />
+          v-if="historyTask?.taskType === 'organize'"
+          label="成功/失败/跳过"
+          width="130"
+        >
+          <template #default="{ row }">
+            <span style="color: #67e8a0">{{ row.succeeded }}</span>
+            <span style="color: #8a97a8"> / </span>
+            <span style="color: #f5a3a3">{{ row.failed }}</span>
+            <span style="color: #8a97a8"> / </span>
+            <span style="color: #e8d9a8">{{ row.skipped }}</span>
+          </template>
+        </el-table-column>
+        <template v-else>
+          <el-table-column label="新增" width="70">
+            <template #default="{ row }"
+              ><span style="color: #67e8a0">{{ row.added }}</span></template
+            >
+          </el-table-column>
+          <el-table-column label="更新" width="70">
+            <template #default="{ row }"
+              ><span style="color: #6ec8ff">{{ row.updated }}</span></template
+            >
+          </el-table-column>
+          <el-table-column label="删除" width="70">
+            <template #default="{ row }"
+              ><span style="color: #f5a3a3">{{ row.deleted }}</span></template
+            >
+          </el-table-column>
+        </template>
+        <el-table-column label="错误/明细" min-width="160" show-overflow-tooltip>
+          <template #default="{ row }">
+            <span>{{ row.error || row.details || "--" }}</span>
+          </template>
+        </el-table-column>
       </el-table>
       <el-empty
         v-if="!historyLoading && history.length === 0"
@@ -508,6 +727,12 @@ onMounted(() => {
   letter-spacing: 1px;
 }
 
+.sync-view__type-tag {
+  background: rgba(110, 200, 255, 0.15);
+  border-color: rgba(110, 200, 255, 0.35);
+  color: #6ec8ff;
+}
+
 .sync-view__status-dot {
   width: 9px;
   height: 9px;
@@ -553,6 +778,20 @@ onMounted(() => {
 .sync-view__field-value {
   color: #bfdcf8;
   font-variant-numeric: tabular-nums;
+}
+
+.sync-view__arrow {
+  color: #e8d9a8;
+  margin: 0 4px;
+}
+
+.sync-view__rule-tag {
+  margin-left: 8px;
+  font-size: 12px;
+  color: #8fb6dd;
+  border: 1px solid rgba(140, 220, 255, 0.25);
+  border-radius: 4px;
+  padding: 1px 6px;
 }
 
 .sync-view__cron-text {
@@ -605,5 +844,4 @@ onMounted(() => {
     padding: 12px;
   }
 }
-
 </style>

@@ -75,7 +75,7 @@ const menuGroups = computed<MenuGroup[]>(() => {  const groups: MenuGroup[] = [
       items: [
         { path: "/admin/users", title: "用户管理", icon: "User" },
         { path: "/admin/roles", title: "角色与权限", icon: "Lock" },
-        { path: "/sync", title: "同步任务", icon: "Clock" },
+        { path: "/sync", title: "自动整理", icon: "Clock" },
         { path: "/audit", title: "操作记录", icon: "List" },
         { path: "/logs", title: "系统日志", icon: "Document" },
         { path: "/settings", title: "系统设置", icon: "Setting" },
