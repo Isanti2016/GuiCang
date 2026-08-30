@@ -6,6 +6,13 @@ import TechBackground from "@/components/TechBackground.vue";
 import HelpView from "@/views/HelpView.vue";
 import { useAuthStore } from "@/stores/auth";
 import { changePassword } from "@/api/auth";
+import {
+  listNotifications,
+  markAllRead,
+  markRead,
+  unreadCount,
+  type Notification,
+} from "@/api/notification";
 
 const route = useRoute();
 const router = useRouter();
@@ -33,6 +40,8 @@ function handleMenuSelect(): void {
 
 const title = computed(() => (route.meta.title as string) || "归藏 NAS");
 const username = computed(() => authStore.user?.username ?? "");
+const notifications = ref<Notification[]>([]);
+const unread = ref(0);
 const isAdmin = computed(() => authStore.isAdmin());
 
 /** 菜单分组（概览 / 存储 / 系统管理），管理员分组按权限过滤。 */
@@ -169,6 +178,44 @@ async function handleCommand(command: string): Promise<void> {
   }
 }
 
+/** 加载通知列表与未读数。 */
+async function loadNotifications(): Promise<void> {
+  try {
+    notifications.value = await listNotifications();
+    unread.value = await unreadCount();
+  } catch {
+    /* 忽略加载失败 */
+  }
+}
+
+/** 点击单条通知标记已读。 */
+async function handleMarkRead(item: Notification): Promise<void> {
+  if (item.readFlag === 1) return;
+  try {
+    await markRead(item.id);
+    await loadNotifications();
+  } catch {
+    /* 忽略 */
+  }
+}
+
+/** 全部标记已读。 */
+async function handleMarkAllRead(): Promise<void> {
+  try {
+    await markAllRead();
+    await loadNotifications();
+  } catch {
+    /* 忽略 */
+  }
+}
+
+/** 简单时间格式化。 */
+function formatNotifTime(ts: number): string {
+  const d = new Date(ts);
+  const pad = (x: number) => String(x).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
 /** 使用手册抽屉开关。 */
 const helpOpen = ref(false);
 
@@ -181,6 +228,9 @@ onMounted(() => {
   }
   updateViewport();
   window.addEventListener("resize", updateViewport);
+  if (authStore.token) {
+    void loadNotifications();
+  }
 });
 
 onBeforeUnmount(() => {
@@ -241,6 +291,54 @@ onBeforeUnmount(() => {
             </button>
             <span class="main-layout__title">{{ title }}</span>
           </div>
+          <el-popover placement="bottom-end" width="340" trigger="click">
+            <template #reference>
+              <el-badge
+                :value="unread"
+                :hidden="unread === 0"
+                class="main-layout__bell"
+              >
+                <el-icon :size="18"><Bell /></el-icon>
+              </el-badge>
+            </template>
+            <div style="max-height: 360px; overflow: auto">
+              <div
+                style="
+                  display: flex;
+                  justify-content: space-between;
+                  align-items: center;
+                  margin-bottom: 8px;
+                "
+              >
+                <span style="font-weight: 500">通知</span>
+                <el-button link size="small" @click="handleMarkAllRead"
+                  >全部已读</el-button
+                >
+              </div>
+              <el-empty
+                v-if="notifications.length === 0"
+                description="暂无通知"
+                :image-size="60"
+              />
+              <div
+                v-for="n in notifications"
+                :key="n.id"
+                @click="handleMarkRead(n)"
+                style="
+                  padding: 8px 4px;
+                  border-bottom: 1px solid #eee;
+                  cursor: pointer;
+                  font-size: 13px;
+                "
+              >
+                <div style="font-weight: 500">{{ n.title }}</div>
+                <div style="color: #666; margin: 2px 0">{{ n.content }}</div>
+                <div style="color: #999; font-size: 12px">
+                  {{ formatNotifTime(n.createdAt) }}
+                </div>
+              </div>
+            </div>
+          </el-popover>
           <el-dropdown @command="handleCommand">
             <span class="main-layout__user">
               {{ username }}

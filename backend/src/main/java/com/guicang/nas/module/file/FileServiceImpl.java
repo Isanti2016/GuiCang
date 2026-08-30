@@ -12,6 +12,8 @@ import com.guicang.nas.infra.storage.StorageService;
 import com.guicang.nas.infra.thumbnail.ThumbnailService;
 import com.guicang.nas.module.file.dto.DuplicateGroup;
 import com.guicang.nas.module.file.dto.FileStreamInfo;
+import com.guicang.nas.module.user.SysUser;
+import com.guicang.nas.module.user.UserService;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -45,6 +47,7 @@ public class FileServiceImpl implements FileService {
   private final FileIndexService fileIndexService;
   private final TrashItemMapper trashItemMapper;
   private final FileVersionMapper fileVersionMapper;
+  private final UserService userService;
 
   @Value("${guicang.file.max-upload-size-bytes:1073741824}")
   private long maxUploadSizeBytes;
@@ -64,13 +67,15 @@ public class FileServiceImpl implements FileService {
       ThumbnailService thumbnailService,
       FileIndexService fileIndexService,
       TrashItemMapper trashItemMapper,
-      FileVersionMapper fileVersionMapper) {
+      FileVersionMapper fileVersionMapper,
+      UserService userService) {
     this.storageService = storageService;
     this.dirPermissionService = dirPermissionService;
     this.thumbnailService = thumbnailService;
     this.fileIndexService = fileIndexService;
     this.trashItemMapper = trashItemMapper;
     this.fileVersionMapper = fileVersionMapper;
+    this.userService = userService;
   }
 
   /**
@@ -331,6 +336,7 @@ public class FileServiceImpl implements FileService {
     if (file.getSize() > maxUploadSizeBytes) {
       throw new BizException("文件超过大小上限（1G）");
     }
+    checkQuota(user.username(), file.getSize());
     if (FileTypeUtils.isBlocked(filename, blockedExtensions)) {
       throw new BizException("不允许上传该类型文件: " + filename);
     }
@@ -702,6 +708,22 @@ public class FileServiceImpl implements FileService {
             .orderByDesc(FileVersion::getCreatedAt));
     for (int i = MAX_VERSIONS_PER_FILE; i < versions.size(); i++) {
       fileVersionMapper.deleteById(versions.get(i).getId());
+    }
+  }
+
+  private void checkQuota(String username, long newSize) {
+    SysUser sysUser = userService.findByUsername(username).orElse(null);
+    if (sysUser == null || sysUser.getQuotaBytes() == null || sysUser.getQuotaBytes() <= 0) {
+      return;
+    }
+    String home = sysUser.getHomePath();
+    if (home == null || home.isBlank()) {
+      return;
+    }
+    long used = fileIndexService.sumSizeByPrefix(home);
+    if (used + newSize > sysUser.getQuotaBytes()) {
+      throw new BizException(
+          "存储空间配额不足：已用 " + used + " 字节，配额 " + sysUser.getQuotaBytes() + " 字节");
     }
   }
 

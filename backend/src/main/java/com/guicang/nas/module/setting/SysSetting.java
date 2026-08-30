@@ -13,4 +13,8 @@ public record SysSetting(String key, String defaultValue, String label, String t
   /** 回收站自动清空天数（0=不自动清空）。 */
   public static final SysSetting TRASH_AUTO_PURGE_DAYS =
       new SysSetting("trash.auto-purge-days", "0", "回收站自动清空天数", "int");
+
+  /** 磁盘空间告警阈值（百分比，0=不告警）。 */
+  public static final SysSetting DISK_ALERT_THRESHOLD =
+      new SysSetting("disk.alert-threshold", "90", "磁盘空间告警阈值(%)", "int");
 }

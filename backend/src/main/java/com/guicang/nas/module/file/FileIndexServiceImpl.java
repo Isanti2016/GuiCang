@@ -175,6 +175,23 @@ public class FileIndexServiceImpl implements FileIndexService {
             .orderByAsc(FileIndex::getPath));
   }
 
+  /**
+   * 统计某路径前缀下所有文件的大小总和（字节）。
+   */
+  @Override
+  public long sumSizeByPrefix(String prefix) {
+    if (prefix == null || prefix.isBlank()) {
+      return 0L;
+    }
+    return fileIndexMapper.selectList(
+        new LambdaQueryWrapper<FileIndex>()
+            .likeRight(FileIndex::getPath, prefix + "/"))
+        .stream()
+        .filter(f -> f.getSize() != null && !"dir".equals(f.getKind()))
+        .mapToLong(FileIndex::getSize)
+        .sum();
+  }
+
   private FileIndex findByPath(String relativePath) {
     return fileIndexMapper.selectOne(
         new LambdaQueryWrapper<FileIndex>().eq(FileIndex::getPath, relativePath));

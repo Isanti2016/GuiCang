@@ -28,4 +28,7 @@ public interface FileIndexService {
 
   /** 全文检索（LIKE 匹配 content）。 */
   List<FileIndex> searchContent(String keyword);
+
+  /** 统计某路径前缀下所有文件的大小总和（字节）。 */
+  long sumSizeByPrefix(String prefix);
 }
