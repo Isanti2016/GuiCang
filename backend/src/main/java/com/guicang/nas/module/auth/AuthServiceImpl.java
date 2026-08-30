@@ -13,6 +13,10 @@ import com.guicang.nas.infra.account.SystemAccountProvisioner;
 import com.guicang.nas.module.auth.dto.CurrentUserInfo;
 import com.guicang.nas.module.auth.dto.LoginRequest;
 import com.guicang.nas.module.auth.dto.LoginResponse;
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.guicang.nas.common.TotpUtil;
+import com.guicang.nas.module.user.SysUser;
+import com.guicang.nas.module.user.SysUserMapper;
 import com.guicang.nas.module.user.UserService;
 import jakarta.servlet.http.HttpServletRequest;
 import org.slf4j.Logger;
@@ -35,18 +39,21 @@ public class AuthServiceImpl implements AuthService {
   private final UserService userService;
   private final SystemAccountProvisioner systemAccountProvisioner;
   private final SessionService sessionService;
+  private final SysUserMapper sysUserMapper;
 
   public AuthServiceImpl(
       PAMVerifier pamVerifier,
       JwtService jwtService,
       UserService userService,
       SystemAccountProvisioner systemAccountProvisioner,
-      SessionService sessionService) {
+      SessionService sessionService,
+      SysUserMapper sysUserMapper) {
     this.pamVerifier = pamVerifier;
     this.jwtService = jwtService;
     this.userService = userService;
     this.systemAccountProvisioner = systemAccountProvisioner;
     this.sessionService = sessionService;
+    this.sysUserMapper = sysUserMapper;
   }
 
   /**
@@ -67,6 +74,10 @@ public class AuthServiceImpl implements AuthService {
         || sysUser.get().getEnabled() == null
         || sysUser.get().getEnabled() == 0) {
       throw new BizException(ResultCodes.UNAUTHORIZED, "账号未开通或已停用");
+    }
+    String totpSecret = sysUser.get().getTotpSecret();
+    if (totpSecret != null && !totpSecret.isBlank() && !TotpUtil.verify(totpSecret, request.totp())) {
+      throw new BizException(ResultCodes.UNAUTHORIZED, "两步验证码错误");
     }
     List<String> authorities = userService.loadAuthorities(request.username());
     String token = jwtService.issue(request.username(), result.uid(), authorities);
@@ -93,6 +104,52 @@ public class AuthServiceImpl implements AuthService {
     } catch (Exception e) {
       log.debug("记录登录会话失败: {}", e.getMessage());
     }
+  }
+
+  @Override
+  @Audit(action = "totp.enable")
+  public String enableTotp() {
+    AuthenticatedUser user = requireUser();
+    String secret = TotpUtil.generateSecret();
+    SysUser sysUser = requireSysUser(user.username());
+    sysUser.setTotpSecret(secret);
+    sysUserMapper.updateById(sysUser);
+    return secret;
+  }
+
+  @Override
+  @Audit(action = "totp.disable")
+  public void disableTotp() {
+    AuthenticatedUser user = requireUser();
+    SysUser sysUser = requireSysUser(user.username());
+    sysUser.setTotpSecret(null);
+    sysUserMapper.updateById(sysUser);
+  }
+
+  @Override
+  public boolean isTotpEnabled() {
+    AuthenticatedUser user = requireUser();
+    SysUser sysUser = sysUserMapper.selectOne(
+        new LambdaQueryWrapper<SysUser>().eq(SysUser::getUsername, user.username()));
+    return sysUser != null && sysUser.getTotpSecret() != null && !sysUser.getTotpSecret().isBlank();
+  }
+
+  private SysUser requireSysUser(String username) {
+    SysUser sysUser = sysUserMapper.selectOne(
+        new LambdaQueryWrapper<SysUser>().eq(SysUser::getUsername, username));
+    if (sysUser == null) {
+      throw new BizException("用户不存在");
+    }
+    return sysUser;
+  }
+
+  private AuthenticatedUser requireUser() {
+    Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+    if (authentication == null
+        || !(authentication.getPrincipal() instanceof AuthenticatedUser user)) {
+      throw new BizException(ResultCodes.UNAUTHORIZED, "未登录或登录已过期");
+    }
+    return user;
   }
 
   /**

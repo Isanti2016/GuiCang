@@ -18,4 +18,13 @@ public interface AuthService {
 
   /** 修改本人密码（校验旧密码，同步 Linux + Samba）。 */
   void changePassword(String oldPassword, String newPassword);
+
+  /** 开启两步验证（生成并保存 TOTP 密钥，返回 Base32 密钥）。 */
+  String enableTotp();
+
+  /** 关闭两步验证。 */
+  void disableTotp();
+
+  /** 当前用户是否已开启两步验证。 */
+  boolean isTotpEnabled();
 }

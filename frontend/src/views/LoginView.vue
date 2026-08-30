@@ -15,6 +15,7 @@ const loading = ref(false);
 const form = reactive({
   username: "",
   password: "",
+  totp: "",
 });
 
 const rules: FormRules = {
@@ -29,7 +30,11 @@ async function handleLogin(): Promise<void> {
   if (!valid) return;
   loading.value = true;
   try {
-    await authStore.login({ username: form.username, password: form.password });
+    await authStore.login({
+      username: form.username,
+      password: form.password,
+      totp: form.totp || undefined,
+    });
     ElMessage.success("登录成功");
     const redirect = (route.query.redirect as string) || "/dashboard";
     await router.replace(redirect);
@@ -75,6 +80,14 @@ async function handleLogin(): Promise<void> {
             placeholder="密码"
             show-password
             autocomplete="current-password"
+          />
+        </el-form-item>
+        <el-form-item label="验证码">
+          <el-input
+            v-model="form.totp"
+            placeholder="已开启两步验证则填写"
+            maxlength="6"
+            autocomplete="one-time-code"
           />
         </el-form-item>
         <el-button

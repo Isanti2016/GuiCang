@@ -39,5 +39,8 @@ public class SysUser {
 
   private String createdAt;
 
+  /** 两步验证 TOTP 密钥（Base32，null/空表示未开启）。 */
+  private String totpSecret;
+
   private String updatedAt;
 }

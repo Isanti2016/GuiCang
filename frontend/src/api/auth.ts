@@ -19,11 +19,27 @@ export interface LoginResponse {
 export interface LoginRequest {
   username: string;
   password: string;
+  totp?: string;
 }
 
 /** 登录（返回 JWT 与用户信息）。 */
 export function login(data: LoginRequest): Promise<LoginResponse> {
   return post<LoginResponse>("/auth/login", data);
+}
+
+/** 开启两步验证（返回 Base32 密钥）。 */
+export function enableTotp(): Promise<string> {
+  return post<string>("/auth/totp/enable");
+}
+
+/** 关闭两步验证。 */
+export function disableTotp(): Promise<void> {
+  return post<void>("/auth/totp/disable");
+}
+
+/** 两步验证状态。 */
+export function totpStatus(): Promise<boolean> {
+  return get<boolean>("/auth/totp/status");
 }
 
 /** 获取当前登录用户信息。 */

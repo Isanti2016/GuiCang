@@ -11,4 +11,11 @@ import jakarta.validation.constraints.Size;
  */
 public record LoginRequest(
     @NotBlank(message = "用户名不能为空") @Size(max = 32, message = "用户名过长") String username,
-    @NotBlank(message = "密码不能为空") @Size(max = 128, message = "密码过长") String password) {}
+    @NotBlank(message = "密码不能为空") @Size(max = 128, message = "密码过长") String password,
+    String totp) {
+
+  /** 兼容两参数构造（未开启两步验证）。 */
+  public LoginRequest(String username, String password) {
+    this(username, password, null);
+  }
+}

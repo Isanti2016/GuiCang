@@ -1,11 +1,16 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, reactive, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
-import { ElMessage, type FormInstance, type FormRules } from "element-plus";
+import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from "element-plus";
 import TechBackground from "@/components/TechBackground.vue";
 import HelpView from "@/views/HelpView.vue";
 import { useAuthStore } from "@/stores/auth";
-import { changePassword } from "@/api/auth";
+import {
+  changePassword,
+  disableTotp,
+  enableTotp,
+  totpStatus,
+} from "@/api/auth";
 import {
   listNotifications,
   markAllRead,
@@ -176,6 +181,8 @@ async function handleCommand(command: string): Promise<void> {
     helpOpen.value = true;
   } else if (command === "password") {
     openPasswordDialog();
+  } else if (command === "totp") {
+    void openTotpDialog();
   }
 }
 
@@ -217,8 +224,56 @@ function formatNotifTime(ts: number): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
+/** 打开两步验证弹窗。 */
+async function openTotpDialog(): Promise<void> {
+  totpDialog.value = true;
+  totpSecret.value = "";
+  await loadTotpStatus();
+}
+
+/** 加载两步验证状态。 */
+async function loadTotpStatus(): Promise<void> {
+  totpLoading.value = true;
+  try {
+    totpEnabled.value = await totpStatus();
+  } catch {
+    /* 忽略 */
+  } finally {
+    totpLoading.value = false;
+  }
+}
+
+/** 开启两步验证（生成密钥）。 */
+async function handleEnableTotp(): Promise<void> {
+  try {
+    totpSecret.value = await enableTotp();
+    ElMessage.success("已生成密钥，请录入 Authenticator");
+  } catch {
+    /* 拦截器已提示 */
+  }
+}
+
+/** 关闭两步验证。 */
+async function handleDisableTotp(): Promise<void> {
+  await ElMessageBox.confirm("确认关闭两步验证？", "关闭两步验证", { type: "warning" });
+  await disableTotp();
+  totpEnabled.value = false;
+  totpSecret.value = "";
+  ElMessage.success("已关闭两步验证");
+}
+
+/** 关闭弹窗。 */
+function closeTotpDialog(): void {
+  totpDialog.value = false;
+  totpSecret.value = "";
+}
+
 /** 使用手册抽屉开关。 */
 const helpOpen = ref(false);
+const totpDialog = ref(false);
+const totpLoading = ref(false);
+const totpEnabled = ref(false);
+const totpSecret = ref("");
 
 onMounted(() => {
   // 已登录但未加载用户信息时补拉（刷新页面后）
@@ -348,6 +403,7 @@ onBeforeUnmount(() => {
             <template #dropdown>
               <el-dropdown-menu>
                 <el-dropdown-item command="password">修改密码</el-dropdown-item>
+                <el-dropdown-item command="totp">两步验证</el-dropdown-item>
                 <el-dropdown-item command="help" divided
                   >使用手册</el-dropdown-item
                 >
@@ -464,6 +520,38 @@ onBeforeUnmount(() => {
       <HelpView />
     </el-drawer>
   </div>
+
+    <!-- 两步验证 -->
+    <el-dialog v-model="totpDialog" title="两步验证" width="440px">
+      <div v-loading="totpLoading">
+        <template v-if="totpEnabled">
+          <el-alert type="success" :closable="false" title="已开启两步验证" />
+          <div style="margin: 12px 0; color: #666; font-size: 13px">
+            登录时需输入 Authenticator 中的 6 位动态码。
+          </div>
+          <el-button type="danger" plain @click="handleDisableTotp"
+            >关闭两步验证</el-button
+          >
+        </template>
+        <template v-else>
+          <template v-if="totpSecret">
+            <el-alert type="warning" :closable="false" title="请先保存密钥" />
+            <div style="margin: 12px 0">
+              <div style="margin-bottom: 4px; font-size: 13px">
+                密钥（手动输入到 Google Authenticator / Authy）：
+              </div>
+              <el-input :model-value="totpSecret" readonly />
+            </div>
+          </template>
+          <el-button type="primary" @click="handleEnableTotp">
+            {{ totpSecret ? "重新生成" : "开启两步验证" }}
+          </el-button>
+        </template>
+      </div>
+      <template #footer>
+        <el-button @click="closeTotpDialog">关闭</el-button>
+      </template>
+    </el-dialog>
 </template>
 
 <style scoped>

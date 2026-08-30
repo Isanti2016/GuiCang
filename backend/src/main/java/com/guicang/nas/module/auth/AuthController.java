@@ -82,4 +82,29 @@ public class AuthController {
     authService.changePassword(request.oldPassword(), request.newPassword());
     return Result.ok();
   }
+
+  /**
+   * 开启两步验证（返回 Base32 密钥，供 Authenticator 录入）。
+   */
+  @PostMapping("/totp/enable")
+  public Result<String> enableTotp() {
+    return Result.ok(authService.enableTotp());
+  }
+
+  /**
+   * 关闭两步验证。
+   */
+  @PostMapping("/totp/disable")
+  public Result<Void> disableTotp() {
+    authService.disableTotp();
+    return Result.ok();
+  }
+
+  /**
+   * 两步验证状态。
+   */
+  @GetMapping("/totp/status")
+  public Result<Boolean> totpStatus() {
+    return Result.ok(authService.isTotpEnabled());
+  }
 }
