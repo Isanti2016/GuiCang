@@ -52,7 +52,6 @@
 | oshi-core | 6.6.x | 主机指标采集（备用，主用 helper） |
 | thumbnailator | 0.4.20 | 图片缩略图 |
 | springdoc-openapi-starter-webmvc-ui | 2.6.x | Swagger/API 文档 |
-| logstash-logback-encoder | 8.x | 结构化 JSON 日志 |
 | lombok | 可选 | 简化样板代码（建议少用） |
 | spring-boot-starter-test | 3.3.x | 单元/集成测试 |
 
@@ -86,9 +85,6 @@
 | Nginx | 1.27（镜像已有） | Docker | 反代/静态 | BSD |
 | Redis | 7.4 | Docker | 缓存/队列/限流 | 自托管内部使用无问题；介意许可可换 Valkey（BSD） |
 | PostgreSQL | 17（镜像已有） | Docker（升级路径） | 关系库 | PostgreSQL License |
-| Elasticsearch | 8.15 | Docker | 日志检索 | Elastic Basic 免费层 |
-| Kibana | 8.15 | Docker | 日志可视化 | 同上 |
-| Filebeat | 8.15 | Docker | 日志采集 | 同上 |
 | ffmpeg | 6.1.1（系统已有） | 宿主机/镜像 | 视频缩略图（二期转码） | 自用无问题 |
 | SQLite | 3.x（随 JDBC 内嵌） | 内嵌 | 默认数据库 | Public Domain |
 
@@ -111,7 +107,7 @@ backend :8080（Spring Boot，非 root）
    ├── /nas（挂载 /home/wb/nas，文件读写）
    └── sudo → /usr/local/bin/guicang-helper（宿主机特权）
 
-日志链路：backend JSON 日志 → 日志卷 → Filebeat → ES :9200 → Kibana :5601
+日志链路：backend 标准文本日志 → 日志卷（logback 滚动，保留 30 天）
 ```
 
 ### 2.2 物理部署视图（Docker Compose 拓扑）
@@ -127,9 +123,6 @@ backend :8080（Spring Boot，非 root）
     ├── nginx        :80 → 主机 80（仅内网+Tailscale 网段放行）
     ├── backend      :8080（内部）挂 nas-data/nas-logs/nas-config + /nas + helper
     ├── redis        :6379（内部）
-    ├── elasticsearch:9200（仅回环）
-    ├── kibana       :5601（仅回环）
-    └── filebeat     （读 nas-logs 卷）
     （切换 PG 时）postgres :5432（内部，卷 guicang-pgdata）
 ```
 
@@ -140,9 +133,6 @@ backend :8080（Spring Boot，非 root）
 | guicang-nginx | nginx:latest | 80:80 | ./deploy/nginx:/etc/nginx/conf.d:ro | 反代 + 静态 |
 | guicang-backend | 自建 Dockerfile | 无（内部 8080） | guicang-data:/data、guicang-logs:/var/log/guicang、guicang-config:/etc/guicang、/home/wb/nas:/nas、helper 与 sudoers | 业务服务 |
 | guicang-redis | redis:7 | 无 | guicang-redis:/data | 缓存 |
-| guicang-es | elasticsearch:8.15 | 127.0.0.1:9200:9200 | guicang-es:/usr/share/elasticsearch/data | 日志 |
-| guicang-kibana | kibana:8.15 | 127.0.0.1:5601:5601 | 无 | 可视化 |
-| guicang-filebeat | elastic/filebeat:8.15 | 无 | guicang-logs:/var/log/guicang:ro | 采集 |
 | guicang-postgres（可选） | postgres:latest | 无（内部 5432） | guicang-pgdata:/var/lib/postgresql/data | 升级路径 |
 
 ### 2.4 网络与端口
@@ -153,7 +143,6 @@ backend :8080（Spring Boot，非 root）
 | 443 | 二期 HTTPS | 同上 | 同上 |
 | 8080 | backend | 仅 guicang-net 内部 | 不暴露 |
 | 6379 | redis | 仅内部 | 不暴露 |
-| 9200/5601 | ES/Kibana | 仅 127.0.0.1 | 不暴露 |
 | 5432 | postgres（可选） | 仅内部 | 不暴露 |
 | 445/139/2049 | Samba/NFS | 内网 | 保持现状 |
 | 3306 | MariaDB | 127.0.0.1 | 保持现状 |
@@ -289,8 +278,7 @@ Quartz：每条 sync_task 动态注册 JobDetail + cron Trigger；立即执行�
 ### 3.8 日志与审计链路
 
 ```text
-logback + logstash-logback-encoder → JSON 文件 /var/log/guicang/app-YYYY-MM-DD.json.log（滚动 30 天）
-Filebeat 采集 → ES 索引 guicang-app-YYYY.MM.DD → Kibana index pattern guicang-app-*
+logback → 标准文本文件 /var/log/guicang/app-YYYY-MM-DD.log（滚动 30 天）
 业务审计单独写 audit_log 表（结构化、可查询、可导出），与运行日志职责分离
 ```
 
@@ -522,7 +510,7 @@ GUICANG_ADMIN_INITIAL=<首次向导填写>
 - 提交：build(deploy): 前后端 Dockerfile
 
 **Step 6.2 Compose 编排**
-- 动作：docker-compose.yml（nginx/backend/redis/es/kibana/filebeat）+ 卷 + 网络
+- 动作：docker-compose.yml（nginx/backend/redis）+ 卷 + 网络
 - 验证：docker compose up -d 全栈启动
 - 提交：build(deploy): Docker Compose 编排
 
@@ -532,9 +520,8 @@ GUICANG_ADMIN_INITIAL=<首次向导填写>
 - 提交：build(deploy): Nginx 与防火墙
 
 **Step 6.4 日志链路**
-- 动作：Filebeat/ES/Kibana 配置
 - 验证：应用日志可检索
-- 提交：build(deploy): ELK 日志链路
+- 提交：build(deploy): 移除 ELK 日志链路
 
 **Step 6.5 一键脚本**
 - 动作：setup.sh/deploy.sh/backup.sh
@@ -581,7 +568,7 @@ GUICANG_ADMIN_INITIAL=<首次向导填写>
 - [ ] 大屏实时显示 CPU/内存/磁盘/存储统计
 - [ ] 目录扫描同步可定时执行，历史可查
 - [ ] 关键操作留审计，可查询导出
-- [ ] 一键部署成功，80 访问，日志进 Kibana
+- [ ] 一键部署成功，80 访问，日志落盘滚动文件
 - [ ] Tailscale 外网可访问，公网不可达
 - [ ] 升级可回滚，压测达标
 

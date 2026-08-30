@@ -14,7 +14,7 @@
 | D4 | UI 框架 | Element Plus（Vue 3 生态最流行、admin 场景成熟、与 ECharts 配合好） |
 | D5 | 分享链接 | 二期做，本期只列入需求 |
 | D6 | 存储 | Web/Samba/NFS 共用 /home/wb/nas，不另造存储 |
-| D7 | 日志 | 本地 ELK 轻量化：Filebeat → Elasticsearch → Kibana，不用 Logstash |
+| D7 | 日志 | 应用自带 logback 滚动文件，标准文本，不引入 ELK |
 | D8 | 外网 | 仅 Tailscale，不暴露公网端口 |
 | D9 | 同步 | 一期只做目录级扫描索引框架，协议二期细化 |
 | D10 | 部署 | 本机 Docker Compose + Nginx，一键部署 |
@@ -61,7 +61,7 @@
     │   │   │
     │   │   └──► SQLite 文件（/data/nas.db，可切 PostgreSQL）
     │   └──────► Redis（会话缓存/队列/限流）
-    └──────────► Filebeat → Elasticsearch → Kibana（日志链路）
+    └──────────► 日志卷（logback 滚动文件 /var/log/guicang）
 
 宿主机特权边界（sudo 白名单，非 root 后端）：
     backend ──sudo──► /usr/local/bin/guicang-helper
@@ -83,8 +83,6 @@
 | guicang-helper | 特权操作：PAM 校验、系统用户管理、Samba 同步、主机指标 | 宿主机脚本，sudo 白名单 |
 | Redis | 会话/权限缓存、登录限流、同步队列 | Docker 容器 |
 | SQLite | 业务数据（用户 profile、RBAC、文件索引、审计、配置） | 卷挂载文件 |
-| Elasticsearch + Kibana | 日志检索与可视化 | Docker 容器 |
-| Filebeat | 采集后端结构化日志 | Docker 容器 |
 | Nginx | 统一入口、反代、静态资源 | Docker 容器（或宿主机，二选一，见 7 节） |
 
 ### 2.3 关键数据流
@@ -93,7 +91,7 @@
 - 文件浏览：前端 → backend 查目录（filesystem）→ 返回列表；下载/预览走 HTTP Range 流。
 - 文件写入：前端 multipart 上传 → backend 校验权限与大小 → 流式写盘 → 更新 file_index → 审计。
 - 监控：backend 定时调用 helper metrics → 缓存最近 N 条 → 大屏轮询。
-- 日志：backend logback 输出 JSON 到日志卷 → Filebeat → ES → Kibana。
+- 日志：backend logback 输出标准文本滚动文件到日志卷（保留 30 天）。
 - 同步：Quartz 触发 → 扫描目录 → 与 file_index 对比 → 增量更新 → 写 sync_history。
 
 ---
@@ -372,7 +370,7 @@ CREATE TABLE sys_config (
 ### 4.6 日志与审计
 
 - 运行日志：logback 输出结构化 JSON 到 /var/log/nas/app-*.json.log（按天滚动、保留 30 天）。
-- 采集：Filebeat 读日志卷 → Elasticsearch → Kibana 索引 nas-app-*。
+- 采集：日志滚动文件保存在日志卷（保留 30 天）。
 - 审计日志：单独入库 audit_log（结构化、可查询、可导出），与运行日志职责分离。
 
 ### 4.7 多数据源 profile
@@ -463,8 +461,6 @@ SyncSource {
 | Nginx | 80（二期 443） | 192.168 网段 + Tailscale 100.x |
 | backend | 8080 | 仅 compose 内网 |
 | Redis | 6379 | 仅 compose 内网 |
-| Elasticsearch | 9200 | 仅本机回环 |
-| Kibana | 5601 | 仅本机回环 |
 | 现有 Samba/NFS/MariaDB/Apache2 | 445/139/2049/3306/8081 | 保持不变（Apache2 迁 8081） |
 | DSH GUI | 3080 | 保持不动 |
 
@@ -475,9 +471,6 @@ services:
   nginx:       # 80:80，静态 + 反代 /api
   backend:     # 8080，nasapp 用户，sudo helper
   redis:       # 6379，持久化 AOF
-  elasticsearch:  # 9200，堆 512m-1g，单节点
-  kibana:      # 5601
-  filebeat:    # 采集 nas-logs 卷
   # 切 PostgreSQL 时增加 postgres 服务
 volumes:
   nas-data:    # SQLite /data/nas.db
@@ -494,11 +487,7 @@ bind mount:
 - 静态托管前端 dist，SPA 回退 index.html；
 - 仅监听 192.168.31.12 与 100.112.98.102，ufw 同步放行内网 + Tailscale 网段。
 
-### 7.4 ELK 要点
 
-- Filebeat 只采集 nas-logs 卷的 app-*.json.log；
-- ES 单节点 discovery.type=single-node，ES_JAVA_OPTS 设 -Xms512m -Xmx1g；
-- Kibana 本机回环访问；预留 Loki 降级方案。
 
 ### 7.5 一键脚本
 
@@ -558,7 +547,7 @@ Flyway 管理版本化 SQL；本地配置与数据卷升级时保留不覆盖。
 | M3 文件管理 | 目录/上传/下载/预览（md/txt 编辑保存/图片/视频 Range）、缩略图、路径安全、file_index | 网页管理 /home/wb/nas，视频可播、md 可编辑、缩略图可见 |
 | M4 监控大屏 | helper metrics、采集、monitor/dashboard API、大屏 ECharts | 大屏实时显示 CPU/内存/磁盘/存储统计 |
 | M5 同步审计 | SyncSource 接口、目录扫描、Quartz、sync API、审计全链路与查询页 | 定时扫描索引，操作可查 |
-| M6 部署 | Dockerfile、compose、Nginx、Filebeat/ES/Kibana、deploy/setup 脚本、ufw、Apache2 迁移 | 一键部署，80 访问，日志进 Kibana |
+| M6 部署 | Dockerfile、compose、Nginx、deploy/setup 脚本、ufw、Apache2 迁移 | 一键部署，80 访问，日志落盘滚动文件 |
 | M7 测试文档 | 单测/集成/冒烟、用户/管理员/API/部署文档 | 内网多设备 + Tailscale 验证通过 |
 | M8 升级压测 | upgrade.sh、Flyway 版本脚本、压测报告、SQLite vs PG | 升级可回滚，压测达标 |
 
@@ -571,7 +560,6 @@ Flyway 管理版本化 SQL；本地配置与数据卷升级时保留不覆盖。
 | helper 特权接口被滥用 | 高 | 白名单 + stdin + 参数校验 + helper 自身审计 |
 | PAM 在容器内不可用 | 高 | 认证经宿主 helper，不依赖容器内 PAM |
 | SQLite 写锁 | 中 | WAL + 读多写少 + PG 预留 |
-| ES 内存压力 | 中 | 512m-1g 堆 + Filebeat + Loki 备选 |
 | 大文件/视频 Range 实现缺陷 | 中 | 集成测试覆盖 Range 与断点 |
 | 现有 Samba 配置改动破坏访问 | 中 | 先备份配置，灰度调整，M2 前验收 Samba |
 | pdbedit 当前报错 | 低 | M2 修复后再依赖 |
@@ -588,7 +576,7 @@ Flyway 管理版本化 SQL；本地配置与数据卷升级时保留不覆盖。
 6. HTTPS：一期 HTTP（内网+Tailscale）。
 7. 数据库：SQLite 起步 + PG（本机已有 postgres:latest 镜像，需要时起容器）。
 
-→ 方案定稿，下一步进入 M0 骨架（届时才安装 JDK/Maven/Redis/ES/Kibana/compose 插件等）。
+→ 方案定稿，下一步进入 M0 骨架（届时才安装 JDK/Maven/Redis/compose 插件等）。
 
 ---
 

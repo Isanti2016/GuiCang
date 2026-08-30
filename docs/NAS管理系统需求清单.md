@@ -35,7 +35,6 @@
 | JDK 21 | apt / SDKMAN | 后端构建与运行 |
 | Maven 3.9 | apt / SDKMAN | 后端构建 |
 | Redis | Docker 容器 | 会话/权限缓存、同步队列、限流 |
-| Elasticsearch + Kibana + Filebeat | Docker 容器 | 日志（本地 ELK，见 2.2） |
 | Nginx | Docker（已有 nginx:latest 镜像） | 统一入口/反向代理/静态资源 |
 | sqlite3 CLI（可选） | apt | 本地排查数据库 |
 | docker-compose-plugin | apt | 支持 docker compose 一键编排 |
@@ -49,7 +48,6 @@
 | 2049 | NFS | 保留 |
 | 3080 | DSH GUI（192.168.31.12:3080） | 保持不动，本方案不占用 |
 | 6379 | 空 | Redis（容器，仅本机/内网） |
-| 9200/5601 | 空 | ES / Kibana（仅本机回环） |
 | 8080 | 空 | 后端 API（内网 + Tailscale） |
 
 ---
@@ -71,9 +69,8 @@
 - 理由：SQLite 零运维适合起步；PG 原生支持并发，真到数百并发时起 PG 容器、改一条配置即可切换。
 - 并发口径已确认：「数百用户」= 总注册数；日常读多写少；单文件上限 1G。
 
-### 2.2 日志（ELK）—— ✅ 方案已定（本地轻量化）
-- 结论：ELK 在本机部署，但砍掉 Logstash，用 Filebeat → Elasticsearch → Kibana。
-- 资源控制：ES 堆限制 512m–1g，Kibana 独立容器；4C/15G 够用。
+### 2.2 日志 —— ✅ 方案已定（应用自带滚动文件）
+- 结论：应用日志由 logback 输出标准文本滚动文件，不引入 ELK 重组件。
 - 备份方案：若 ES 吃紧，降级为 Loki + Promtail + Grafana（更省，可与监控大屏共用 Grafana）。
 - 日志格式：应用输出结构化 JSON；关键错误另有滚动文件日志兜底。
 
@@ -109,7 +106,7 @@
 | 前端 | Vue 3 + TypeScript + Vite + Pinia + Element Plus | 已定 Element Plus |
 | 数据库 | SQLite（默认）/ PostgreSQL（profile 切换） | DAO 抽象（MyBatis-Plus） |
 | 缓存 | Redis | 会话/权限缓存、队列、限流 |
-| 日志 | Filebeat + Elasticsearch + Kibana | 本地 ELK，结构化 JSON |
+| 日志 | logback 滚动文件 | 应用自带，标准文本 |
 | 文件存储 | /home/wb/nas（复用 Samba/NFS 目录） | 不另造存储引擎 |
 | 部署 | Docker Compose + Nginx | 一键部署 |
 | 外网 | Tailscale（已部署） | 不暴露公网 |
@@ -172,7 +169,6 @@
     │   ├── nginx/                       # 站点与反代配置
     │   ├── backend/Dockerfile
     │   ├── frontend/Dockerfile
-    │   └── elk/                         # filebeat/es/kibana 编排与资源限制
     ├── scripts/
     │   ├── setup.sh                     # 首次初始化（生成密钥、初始化向导标记）
     │   ├── deploy.sh                    # 一键部署
@@ -287,7 +283,7 @@ Web 用户、Linux 系统用户、Samba 用户（tdbsam）同一套账号；Web 
 
 ## 9. 部署方案（本机）
 
-- [ ] Docker Compose 编排：backend、frontend（Nginx 托管静态）、Redis、ES、Kibana、Filebeat
+- [ ] Docker Compose 编排：backend、frontend（Nginx 托管静态）、Redis
 - [ ] Nginx 统一入口，反代 /api 到后端；只监听 192.168 网段 + Tailscale 100.x
 - [ ] 数据卷挂载：数据库文件、/home/wb/nas（存储）、日志、本地配置（容器重建不丢数据）
 - [ ] 健康检查 /actuator/health
@@ -329,7 +325,7 @@ Web 用户、Linux 系统用户、Samba 用户（tdbsam）同一套账号；Web 
 | M3 | 文件管理（目录/上传/下载/预览/编辑/缩略图） | CRUD、上传、预览编辑、缩略图分次提交 |
 | M4 | 系统监控 + 首页大屏 | 采集、大屏分次提交 |
 | M5 | 同步框架（目录扫描）+ 审计日志 | 同步、审计分次提交 |
-| M6 | 部署编排（Docker/Nginx/ELK/一键脚本） | 部署提交 |
+| M6 | 部署编排（Docker/Nginx/一键脚本） | 部署提交 |
 | M7 | 测试验证 + 文档 | 文档提交 |
 | M8 | 升级机制 + 压测调优 | 升级、优化分次提交 |
 
@@ -349,7 +345,6 @@ Web 用户、Linux 系统用户、Samba 用户（tdbsam）同一套账号；Web 
 | 风险 | 影响 | 应对 |
 |---|---|---|
 | SQLite 写并发瓶颈 | 数百并发写失败 | DAO 抽象 + PostgreSQL profile 一键切换 |
-| ES 内存占用 | 本机卡顿 | 堆 512m–1g + Filebeat 替代 Logstash + Loki 备选 |
 | 后端管理系统账号的权限 | 安全风险 | 方案 A：sudo 白名单 helper，后端不跑 root |
 | 大文件上传中断 | 失败/超时 | 分片上传 + 断点续传 |
 | 权限越权 | 数据泄露 | 后端强制校验 + 审计 |
@@ -362,4 +357,4 @@ Web 用户、Linux 系统用户、Samba 用户（tdbsam）同一套账号；Web 
 
 1. 命名：GuiCang（归藏），已确认。
 2. 方案已全部定稿（数据库/并发/账号打通/UI/分享链接/缩略图/md 编辑/HTTPS 均已确认）。
-3. 下一步：进入 M0 骨架（届时才安装 JDK/Maven/Redis/ES/Kibana/compose 插件等）。
+3. 下一步：进入 M0 骨架（届时才安装 JDK/Maven/Redis/compose 插件等）。

@@ -9,7 +9,7 @@
 #   bash scripts/docker-start.sh status    查看状态
 #   bash scripts/docker-start.sh logs      查看后端日志（-f 跟随可加参数）
 #   bash scripts/docker-start.sh down      停止并移除容器/网络（保留数据卷）
-#   bash scripts/docker-start.sh full      完整模式：含 ELK 日志链路（生产）
+#   bash scripts/docker-start.sh full      完整模式：宿主机 helper 认证（生产）
 #   bash scripts/docker-start.sh help      帮助
 #
 # 首次运行自动：
@@ -20,7 +20,7 @@
 # 模式说明：
 #   - 默认（轻量）：容器内自建 admin 系统账号，local 认证，开箱即用；不接触宿主凭据。
 #     登录：admin / 密码由 .env 的 GUICANG_CONTAINER_ADMIN_PASSWORD 决定（默认 guicang123456）
-#   - --full（生产）：走宿主机 guicang-helper 非 root 认证 + ELK 日志，见 deploy.sh
+#   - --full（生产）：走宿主机 guicang-helper 非 root 认证，见 deploy.sh
 #
 # 前置：docker 与 docker compose 插件已安装
 # =============================================================================
@@ -150,7 +150,7 @@ cmd_logs() {
 }
 
 cmd_full() {
-  say "完整模式：使用 deploy/docker-compose.yml（含 ELK 日志链路 + 宿主机 helper 认证）"
+  say "完整模式：使用 deploy/docker-compose.yml（宿主机 helper 认证）"
   say "前置：1) bash scripts/setup.sh 已生成 .env  2) 宿主机已部署 guicang-helper（scripts/install-helper.sh）"
   bash "$SCRIPT_DIR/deploy.sh"
 }

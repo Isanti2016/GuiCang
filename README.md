@@ -6,7 +6,7 @@
 
 - 后端：Java 21 + Spring Boot 3.3 + Maven + MyBatis-Plus + Flyway + Quartz + SQLite（可切 PostgreSQL）
 - 前端：Vue 3 + TypeScript + Vite 6 + Element Plus + Pinia + ECharts
-- 部署：Docker Compose + Nginx + Redis + ELK（Filebeat/ES/Kibana）
+- 部署：Docker Compose + Nginx + Redis
 
 ## 已实现功能
 
@@ -22,7 +22,7 @@
 ```text
 backend/    Spring Boot 后端（common/config/module.*/infra）
 frontend/   Vue 3 前端（api/components/composables/layout/router/stores/views）
-deploy/     docker-compose、nginx、filebeat、.env.example
+deploy/     docker-compose、nginx、.env.example
 scripts/    guicang-helper（特权脚本）、install/dir-permissions/samba-include、
             setup/deploy/backup/upgrade
 docs/       需求/设计/技术方案/规范文档
@@ -69,16 +69,16 @@ bash scripts/docker-start.sh restart  # 重启
 bash scripts/docker-start.sh status   # 状态
 bash scripts/docker-start.sh logs     # 日志
 bash scripts/docker-start.sh down     # 停止并移除容器/网络（保留数据卷）
-bash scripts/docker-start.sh full     # 完整模式：宿主机 helper 认证 + ELK 日志链路
+bash scripts/docker-start.sh full     # 完整模式：宿主机 helper 认证
 ```
 
 说明：
 - 轻量模式拓扑为 `nginx(:80) → backend(:8080 内部)`，无 Redis/ELK 依赖，内存占用小。
 - 认证为**容器内系统账号**（entrypoint 自动创建 admin），与宿主机凭据完全隔离。
 - 存储根默认 `/home/wb/nas`（bind 挂载），可用 `.env` 的 `GUICANG_STORAGE_ROOT` 修改。
-- 生产环境（需要宿主机系统账号/Samba 一致认证 + ELK 日志）请用 `docker-start.sh full`。
+- 生产环境（需要宿主机系统账号/Samba 一致认证）请用 `docker-start.sh full`。
 
-### 方式二：完整部署（生产，宿主机账号体系 + ELK）
+### 方式二：完整部署（生产，宿主机账号体系）
 
 ```bash
 # 1. 宿主特权边界（需确认，见 HANDOFF）

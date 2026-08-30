@@ -10,7 +10,7 @@
 - 本地：/home/codes/guicang。目标：Web 统一管理 Samba/NFS 存储 /home/wb/nas（文件/用户/监控/同步/审计，Tailscale 外网）。
 
 ## 关键决策（已确认）
-- Java 21 + Spring Boot 3.3.x + Maven；Vue 3 + TS + Vite 6 + Element Plus；SQLite（可切 PG）；Redis；本地 ELK；Docker Compose + Nginx。
+- Java 21 + Spring Boot 3.3.x + Maven；Vue 3 + TS + Vite 6 + Element Plus；SQLite（可切 PG）；Redis；Docker Compose + Nginx。
 - 账号：Web 用户 = Linux 系统用户，PAM 认证，sudo 白名单 guicang-helper，后端不跑 root；密码不落库。
 - 提交：一律中文 Conventional Commits。
 
@@ -21,7 +21,7 @@
 - 同步/审计：目录扫描增量、Quartz 调度 + 立即执行 + 历史；注解 AOP 全链路审计 + 查询页
 - 前端：登录/布局（按权限菜单）/文件管理/同步/审计/大屏
 - 脚本：guicang-helper（8 子命令，26 单测 + 9 e2e）、install/dir-permissions/samba-include/setup/deploy/backup/upgrade
-- 部署配置：Dockerfile、compose（nginx/backend/redis/es/kibana/filebeat）、nginx 反代（Range/1100m）、filebeat.yml、logback JSON
+- 部署配置：Dockerfile、compose（nginx/backend/redis）、nginx 反代（Range/1100m）、logback 滚动文件日志
 - 测试/文档：JaCoCo 80.8%（核心 Service 全达标）、Vitest 冒烟+权限矩阵、docs/压测报告.md（读 600+ req/s 基线）、README/HANDOFF/手册实施记录
 
 ## 最近一轮新增功能（家庭 NAS 增强，已提交推送）

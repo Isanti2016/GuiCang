@@ -6,7 +6,7 @@
 #   - 认证 local 验证器：只读挂载宿主机 /etc/shadow、/etc/passwd、/etc/group 与
 #     scripts/（guicang-pam-verify.py 纯 ctypes 调 libpam），登录验证宿主机系统账号，
 #     与 Samba 账号一致、开箱即用
-#   - 完整版（含 ELK 日志链路）用 deploy/docker-compose.yml + --full 子命令
+#   - 完整版用 deploy/docker-compose.yml + --full 子命令
 # 数据卷：guicang-data（SQLite/缩略图）、guicang-logs（日志）
 # bind：宿主机存储根（默认 /home/wb/nas，可改 .env 的 GUICANG_STORAGE_ROOT）
 #
