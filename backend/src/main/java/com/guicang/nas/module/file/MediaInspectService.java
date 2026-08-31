@@ -1,5 +1,6 @@
 package com.guicang.nas.module.file;
 
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.guicang.nas.module.file.dto.MediaMetadataVO;
@@ -37,12 +38,14 @@ public class MediaInspectService {
       Set.of("h264", "vp8", "vp9", "av1", "theora");
 
   private final ObjectMapper objectMapper;
+  private final MediaMetadataCacheMapper cacheMapper;
 
   /** 同 path 并发去重，避免一次播放触发多次 ffprobe（CPU 与磁盘 I/O 双重消耗）。 */
   private final ConcurrentHashMap<String, CompletableFuture<MediaMetadataVO>> inflight = new ConcurrentHashMap<>();
 
-  public MediaInspectService(ObjectMapper objectMapper) {
+  public MediaInspectService(ObjectMapper objectMapper, MediaMetadataCacheMapper cacheMapper) {
     this.objectMapper = objectMapper;
+    this.cacheMapper = cacheMapper;
   }
 
   /**
@@ -126,5 +129,72 @@ public class MediaInspectService {
   private MediaMetadataVO errorResult(String code) {
     return new MediaMetadataVO(
         code, "", "", List.of(), List.of(), 0, 0, 0, false, null, null);
+  }
+
+  /** 从专用缓存表读取（命中即返，未命中返 null）。 */
+  public MediaMetadataVO readFromCache(String relativePath) {
+    MediaMetadataCache row = cacheMapper.selectById(relativePath);
+    if (row == null) return null;
+    Boolean ba = (row.getAudioCodec() == null || row.getAudioCodec().isBlank())
+        ? null
+        : AUDIO_SUPPORTED.contains(row.getAudioCodec());
+    Boolean bv = (row.getVideoCodec() == null || row.getVideoCodec().isBlank())
+        ? null
+        : VIDEO_SUPPORTED.contains(row.getVideoCodec());
+    java.util.List<String> audios = parseListOrEmpty(row.getAudioCodecs());
+    java.util.List<String> videos = parseListOrEmpty(row.getVideoCodecs());
+    return new MediaMetadataVO(
+        row.getContainer() == null ? "" : row.getContainer(),
+        row.getVideoCodec() == null ? "" : row.getVideoCodec(),
+        row.getAudioCodec() == null ? "" : row.getAudioCodec(),
+        audios,
+        videos,
+        row.getDurationSec() == null ? 0L : row.getDurationSec(),
+        row.getWidth() == null ? 0 : row.getWidth(),
+        row.getHeight() == null ? 0 : row.getHeight(),
+        row.getHasSubtitle() != null && row.getHasSubtitle() == 1,
+        ba,
+        bv);
+  }
+
+  /** 写入/覆盖缓存。空字符串也写入，等价「已探测」标记。 */
+  public void writeToCache(String relativePath, MediaMetadataVO vo) {
+    try {
+      MediaMetadataCache row = new MediaMetadataCache();
+      row.setPath(relativePath);
+      row.setContainer(vo.container());
+      row.setVideoCodec(vo.videoCodec());
+      row.setAudioCodec(vo.audioCodec());
+      row.setDurationSec(vo.durationSec() == 0 ? null : vo.durationSec());
+      row.setWidth(vo.width());
+      row.setHeight(vo.height());
+      row.setAudioCodecs(toJsonArray(vo.audioCodecs()));
+      row.setVideoCodecs(toJsonArray(vo.videoCodecs()));
+      row.setHasSubtitle(vo.hasSubtitle() ? 1 : 0);
+      row.setProbedAt(System.currentTimeMillis());
+      cacheMapper.insert(row);
+    } catch (Exception e) {
+      // 失败不致命：探测结果已返给前端，下次会再探测
+      log.warn("写入媒体缓存失败 ({}): {}", relativePath, e.toString());
+    }
+  }
+
+  private java.util.List<String> parseListOrEmpty(String json) {
+    if (json == null || json.isBlank()) return java.util.List.of();
+    try {
+      return objectMapper.readValue(json, objectMapper.getTypeFactory()
+          .constructCollectionType(java.util.List.class, String.class));
+    } catch (Exception e) {
+      return java.util.List.of();
+    }
+  }
+
+  private String toJsonArray(java.util.List<String> list) {
+    if (list == null || list.isEmpty()) return "[]";
+    try {
+      return objectMapper.writeValueAsString(list);
+    } catch (Exception e) {
+      return "[]";
+    }
   }
 }
