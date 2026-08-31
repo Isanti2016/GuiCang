@@ -13,6 +13,7 @@ import com.guicang.nas.infra.account.SystemAccountProvisioner;
 import com.guicang.nas.module.auth.dto.CurrentUserInfo;
 import com.guicang.nas.module.auth.dto.LoginRequest;
 import com.guicang.nas.module.auth.dto.LoginResponse;
+import com.guicang.nas.module.auth.dto.TotpEnableResult;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.guicang.nas.common.TotpUtil;
 import com.guicang.nas.module.user.SysUser;
@@ -23,7 +24,11 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.ThreadLocalRandom;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
@@ -40,6 +45,7 @@ public class AuthServiceImpl implements AuthService {
   private final SystemAccountProvisioner systemAccountProvisioner;
   private final SessionService sessionService;
   private final SysUserMapper sysUserMapper;
+  private final RecoveryCodeMapper recoveryCodeMapper;
 
   public AuthServiceImpl(
       PAMVerifier pamVerifier,
@@ -47,13 +53,15 @@ public class AuthServiceImpl implements AuthService {
       UserService userService,
       SystemAccountProvisioner systemAccountProvisioner,
       SessionService sessionService,
-      SysUserMapper sysUserMapper) {
+      SysUserMapper sysUserMapper,
+      RecoveryCodeMapper recoveryCodeMapper) {
     this.pamVerifier = pamVerifier;
     this.jwtService = jwtService;
     this.userService = userService;
     this.systemAccountProvisioner = systemAccountProvisioner;
     this.sessionService = sessionService;
     this.sysUserMapper = sysUserMapper;
+    this.recoveryCodeMapper = recoveryCodeMapper;
   }
 
   /**
@@ -76,8 +84,12 @@ public class AuthServiceImpl implements AuthService {
       throw new BizException(ResultCodes.UNAUTHORIZED, "账号未开通或已停用");
     }
     String totpSecret = sysUser.get().getTotpSecret();
-    if (totpSecret != null && !totpSecret.isBlank() && !TotpUtil.verify(totpSecret, request.totp())) {
-      throw new BizException(ResultCodes.UNAUTHORIZED, "两步验证码错误");
+    if (totpSecret != null && !totpSecret.isBlank()) {
+      boolean totpOk = TotpUtil.verify(totpSecret, request.totp());
+      boolean recoveryOk = consumeRecoveryCode(sysUser.get().getId(), request.totp());
+      if (!totpOk && !recoveryOk) {
+        throw new BizException(ResultCodes.UNAUTHORIZED, "两步验证码错误");
+      }
     }
     List<String> authorities = userService.loadAuthorities(request.username());
     String token = jwtService.issue(request.username(), result.uid(), authorities);
@@ -108,13 +120,27 @@ public class AuthServiceImpl implements AuthService {
 
   @Override
   @Audit(action = "totp.enable")
-  public String enableTotp() {
+  public TotpEnableResult enableTotp() {
     AuthenticatedUser user = requireUser();
     String secret = TotpUtil.generateSecret();
     SysUser sysUser = requireSysUser(user.username());
     sysUser.setTotpSecret(secret);
     sysUserMapper.updateById(sysUser);
-    return secret;
+    // 重新开启时清掉旧恢复码，重新生成 10 个
+    recoveryCodeMapper.delete(
+        new LambdaQueryWrapper<RecoveryCode>().eq(RecoveryCode::getUserId, sysUser.getId()));
+    List<String> codes = new ArrayList<>(10);
+    for (int i = 0; i < 10; i++) {
+      String code = generateRecoveryCode();
+      codes.add(code);
+      RecoveryCode rc = new RecoveryCode();
+      rc.setUserId(sysUser.getId());
+      rc.setCodeHash(sha256Hex(code));
+      rc.setUsed(0);
+      rc.setCreatedAt(System.currentTimeMillis());
+      recoveryCodeMapper.insert(rc);
+    }
+    return new TotpEnableResult(secret, codes);
   }
 
   @Override
@@ -124,6 +150,47 @@ public class AuthServiceImpl implements AuthService {
     SysUser sysUser = requireSysUser(user.username());
     sysUser.setTotpSecret(null);
     sysUserMapper.updateById(sysUser);
+    recoveryCodeMapper.delete(
+        new LambdaQueryWrapper<RecoveryCode>().eq(RecoveryCode::getUserId, sysUser.getId()));
+  }
+
+  /** 校验并消费一次性恢复码；命中则标记已用返回 true。 */
+  private boolean consumeRecoveryCode(Long userId, String code) {
+    if (code == null || code.isBlank()) {
+      return false;
+    }
+    RecoveryCode rc = recoveryCodeMapper.selectOne(
+        new LambdaQueryWrapper<RecoveryCode>()
+            .eq(RecoveryCode::getUserId, userId)
+            .eq(RecoveryCode::getCodeHash, sha256Hex(code.trim()))
+            .eq(RecoveryCode::getUsed, 0)
+            .last("LIMIT 1"));
+    if (rc == null) {
+      return false;
+    }
+    rc.setUsed(1);
+    rc.setUsedAt(System.currentTimeMillis());
+    recoveryCodeMapper.updateById(rc);
+    return true;
+  }
+
+  /** 生成 6 位数字恢复码（与 TOTP 动态码同格式，登录框无需改动）。 */
+  private String generateRecoveryCode() {
+    return String.format("%06d", ThreadLocalRandom.current().nextInt(0, 1_000_000));
+  }
+
+  private String sha256Hex(String value) {
+    try {
+      MessageDigest md = MessageDigest.getInstance("SHA-256");
+      byte[] hash = md.digest(value.getBytes(StandardCharsets.UTF_8));
+      StringBuilder sb = new StringBuilder(64);
+      for (byte b : hash) {
+        sb.append(String.format("%02x", b));
+      }
+      return sb.toString();
+    } catch (Exception e) {
+      throw new IllegalStateException("SHA-256 不可用", e);
+    }
   }
 
   @Override

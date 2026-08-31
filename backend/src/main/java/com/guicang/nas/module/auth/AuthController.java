@@ -5,6 +5,7 @@ import com.guicang.nas.module.auth.dto.ChangePasswordRequest;
 import com.guicang.nas.module.auth.dto.CurrentUserInfo;
 import com.guicang.nas.module.auth.dto.LoginRequest;
 import com.guicang.nas.module.auth.dto.LoginResponse;
+import com.guicang.nas.module.auth.dto.TotpEnableResult;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -87,7 +88,7 @@ public class AuthController {
    * 开启两步验证（返回 Base32 密钥，供 Authenticator 录入）。
    */
   @PostMapping("/totp/enable")
-  public Result<String> enableTotp() {
+  public Result<TotpEnableResult> enableTotp() {
     return Result.ok(authService.enableTotp());
   }
 

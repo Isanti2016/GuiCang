@@ -27,9 +27,15 @@ export function login(data: LoginRequest): Promise<LoginResponse> {
   return post<LoginResponse>("/auth/login", data);
 }
 
-/** 开启两步验证（返回 Base32 密钥）。 */
-export function enableTotp(): Promise<string> {
-  return post<string>("/auth/totp/enable");
+/** 开启两步验证返回结果（密钥 + 一次性恢复码）。 */
+export interface TotpEnableResult {
+  secret: string;
+  recoveryCodes: string[];
+}
+
+/** 开启两步验证（返回密钥 + 10 个一次性恢复码）。 */
+export function enableTotp(): Promise<TotpEnableResult> {
+  return post<TotpEnableResult>("/auth/totp/enable");
 }
 
 /** 关闭两步验证。 */

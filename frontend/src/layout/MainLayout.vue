@@ -80,6 +80,7 @@ const menuGroups = computed<MenuGroup[]>(() => {  const groups: MenuGroup[] = [
         { path: "/files", title: "文件管理", icon: "Folder" },
         { path: "/gallery", title: "相册", icon: "Picture" },
         { path: "/cameras", title: "监控录像", icon: "VideoCamera" },
+        { path: "/sync", title: "自动整理", icon: "Clock" },
         { path: "/trash", title: "回收站", icon: "Delete" },
       ],
     },
@@ -90,7 +91,6 @@ const menuGroups = computed<MenuGroup[]>(() => {  const groups: MenuGroup[] = [
       items: [
         { path: "/admin/users", title: "用户管理", icon: "User" },
         { path: "/admin/roles", title: "角色与权限", icon: "Lock" },
-        { path: "/sync", title: "自动整理", icon: "Clock" },
         { path: "/audit", title: "操作记录", icon: "List" },
         { path: "/logs", title: "系统日志", icon: "Document" },
         { path: "/settings", title: "系统设置", icon: "Setting" },
@@ -247,8 +247,10 @@ async function loadTotpStatus(): Promise<void> {
 /** 开启两步验证（生成密钥）。 */
 async function handleEnableTotp(): Promise<void> {
   try {
-    totpSecret.value = await enableTotp();
-    ElMessage.success("已生成密钥，请录入 Authenticator");
+    const result = await enableTotp();
+    totpSecret.value = result.secret;
+    totpCodes.value = result.recoveryCodes;
+    ElMessage.success("已生成密钥与恢复码，请妥善保存恢复码");
   } catch {
     /* 拦截器已提示 */
   }
@@ -267,6 +269,7 @@ async function handleDisableTotp(): Promise<void> {
 function closeTotpDialog(): void {
   totpDialog.value = false;
   totpSecret.value = "";
+  totpCodes.value = [];
 }
 
 /** 使用手册抽屉开关。 */
@@ -275,6 +278,7 @@ const totpDialog = ref(false);
 const totpLoading = ref(false);
 const totpEnabled = ref(false);
 const totpSecret = ref("");
+const totpCodes = ref<string[]>([]);
 
 onMounted(() => {
   // 已登录但未加载用户信息时补拉（刷新页面后）
@@ -543,6 +547,25 @@ onBeforeUnmount(() => {
               </div>
               <el-input :model-value="totpSecret" readonly />
             </div>
+            <template v-if="totpCodes.length">
+              <el-alert type="error" :closable="false" style="margin: 12px 0">
+                <div style="font-size: 13px; line-height: 1.6">
+                  恢复码（<b>仅此一次展示，请立即保存</b>）：共 10 个，
+                  每个只能用一次。验证器丢失或动态码无法输入时，登录填任一未使用的恢复码即可。已用完可重新开启两步验证再生成。
+                </div>
+              </el-alert>
+              <div class="totp-codes">
+                <el-tag
+                  v-for="(c, i) in totpCodes"
+                  :key="i"
+                  size="large"
+                  effect="dark"
+                  style="margin: 0 6px 6px 0; font-family: monospace; letter-spacing: 2px"
+                >
+                  {{ c }}
+                </el-tag>
+              </div>
+            </template>
           </template>
           <el-button type="primary" @click="handleEnableTotp">
             {{ totpSecret ? "重新生成" : "开启两步验证" }}
