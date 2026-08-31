@@ -48,6 +48,11 @@
 - 阅读体验：前端 ReaderView 沉浸式阅读页（/reader?path=），目录侧栏、字号/行距/主题（纸质/羊皮纸/夜间）本地记忆、滚动防抖自动保存进度、章节上下翻
 - 文件管理入口：FileView 点击/双击 txt|epub 直接进阅读器，卡片与表格操作列新增「阅读」按钮
 - 修复生产 bug：Spring Security 6 StrictHttpFirewall 默认拦截 WebDAV 非标准方法（PROPFIND/MKCOL/MOVE 等全部 400）→ 显式 HttpFirewall 白名单 + DavController OPTIONS 显式路由
+
+## 本轮新增（2026-08-31，断点续传 + PWA，已提交推送）
+- 分片断点续传：新增 /files/chunk/status 查询已传分片（uploadedChunks + uploadedBytes），前端大文件上传改稳定指纹 uploadId（大小+名字哈希+修改时间），中断重传自动跳过已传分片；complete 仍做完整性兜底校验
+- 孤儿分片清理：ChunkPurgeJob 每天 03:30 清理 .guicang-tmp/chunks 下超过 24h 未更新的分片目录
+- PWA：manifest.webmanifest（深色主题适配）+ sw.js（网络优先离线回退），index.html 挂 manifest/theme-color/apple-touch-icon；Service Worker 仅生产构建注册（dev 不干扰热更新）
 - 测试补齐：dav（12）/favorite（6）/notification（7+5）/share（12）模块零测试清零；reader 模块 EncodingDetector（8）/Txt（16）/Epub（11）/API（10）；后端全量 225 测试、前端 23 测试全绿
 - 另：修复 EncodingDetector 64KB 探测头截断误判 GB18030（尾部去 1~3 字节重试）；修复 epub 标题提取顺序 bug
 

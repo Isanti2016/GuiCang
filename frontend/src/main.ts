@@ -23,3 +23,10 @@ app.use(createPinia());
 app.use(router);
 app.use(ElementPlus, { locale: zhCn });
 app.mount("#app");
+
+// PWA：生产构建注册 Service Worker（离线缓存；dev 不注册避免干扰热更新）
+if (import.meta.env.PROD && "serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("/sw.js").catch(() => {});
+  });
+}

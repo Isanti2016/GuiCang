@@ -4,6 +4,7 @@ import com.guicang.nas.common.Result;
 import com.guicang.nas.infra.storage.FileEntry;
 import com.guicang.nas.module.file.dto.DuplicateGroup;
 import com.guicang.nas.module.file.dto.FileBatchDeleteRequest;
+import com.guicang.nas.module.file.dto.ChunkStatus;
 import com.guicang.nas.module.file.dto.FileChunkCompleteRequest;
 import com.guicang.nas.module.file.dto.FileMoveRequest;
 import com.guicang.nas.module.file.dto.FilePathRequest;
@@ -264,6 +265,14 @@ public class FileController {
     return Result.ok(
         fileService.completeChunkUpload(
             request.path(), request.filename(), request.uploadId(), request.totalChunks()));
+  }
+
+  /**
+   * 查询已上传分片（断点续传）。
+   */
+  @GetMapping("/chunk/status")
+  public Result<ChunkStatus> chunkStatus(@RequestParam String uploadId) {
+    return Result.ok(fileService.chunkStatus(uploadId));
   }
 
   /**

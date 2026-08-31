@@ -28,6 +28,7 @@ import {
   streamUrl,
   thumbnailUrl,
   completeChunkUpload,
+  chunkStatus,
   uploadChunk,
   uploadWithProgress,
   writeText,
@@ -267,21 +268,42 @@ const uploading = ref(false);
 const CHUNK_SIZE = 5 * 1024 * 1024;
 const CHUNK_THRESHOLD = 50 * 1024 * 1024;
 
-/** 大文件分片上传（>50MB 自动分片，逐片上传后合并）。 */
+/** 大文件分片上传（>50MB 自动分片；稳定 uploadId 支持断点续传：查询已传分片并跳过）。 */
 async function uploadFileChunked(
   path: string,
   file: File,
   onProgress?: (percent: number) => void,
 ): Promise<void> {
-  const uploadId = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  const uploadId = stableUploadId(file);
   const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
+  let uploaded = new Set<number>();
+  try {
+    const status = await chunkStatus(uploadId);
+    uploaded = new Set(status.uploadedChunks);
+  } catch {
+    // 查询失败按全新上传处理
+  }
   for (let i = 0; i < totalChunks; i++) {
+    if (uploaded.has(i)) {
+      onProgress?.(Math.round(((i + 1) / totalChunks) * 100));
+      continue;
+    }
     const start = i * CHUNK_SIZE;
     const end = Math.min(start + CHUNK_SIZE, file.size);
     await uploadChunk(path, file.name, uploadId, i, totalChunks, file.slice(start, end));
     onProgress?.(Math.round(((i + 1) / totalChunks) * 100));
   }
   await completeChunkUpload(path, file.name, uploadId, totalChunks);
+}
+
+/** 稳定分片指纹：大小 + 名字哈希 + 修改时间，中断重传同一文件时复用同一 uploadId。 */
+function stableUploadId(file: File): string {
+  let h = 0;
+  const seed = `${file.name}-${file.lastModified}`;
+  for (let i = 0; i < seed.length; i++) {
+    h = (h * 31 + seed.charCodeAt(i)) | 0;
+  }
+  return `${file.size}-${(h >>> 0).toString(36)}`;
 }
 
 /** 逐文件上传（带总体进度）。el-upload 的 file-list 元素为 UploadUserFile，取 raw 原生 File。 */

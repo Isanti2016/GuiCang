@@ -10,6 +10,7 @@ import com.guicang.nas.infra.storage.FileEntry;
 import com.guicang.nas.infra.storage.FileTypeUtils;
 import com.guicang.nas.infra.storage.StorageService;
 import com.guicang.nas.infra.thumbnail.ThumbnailService;
+import com.guicang.nas.module.file.dto.ChunkStatus;
 import com.guicang.nas.module.file.dto.DuplicateGroup;
 import com.guicang.nas.module.file.dto.FileStreamInfo;
 import com.guicang.nas.module.user.SysUser;
@@ -17,6 +18,7 @@ import com.guicang.nas.module.user.UserService;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
@@ -752,6 +754,37 @@ public class FileServiceImpl implements FileService {
     } catch (IOException e) {
       throw new BizException("分片上传失败: " + e.getMessage());
     }
+  }
+
+  @Override
+  public ChunkStatus chunkStatus(String uploadId) {
+    requireUser();
+    if (uploadId == null || uploadId.isBlank()) {
+      throw new BizException("uploadId 不能为空");
+    }
+    Path chunkDir = storageService.root().resolve(".guicang-tmp/chunks").resolve(uploadId);
+    if (!Files.isDirectory(chunkDir)) {
+      return new ChunkStatus(uploadId, List.of(), 0L);
+    }
+    List<Integer> uploaded = new ArrayList<>();
+    long[] bytes = {0L};
+    try (var stream = Files.list(chunkDir)) {
+      stream.forEach(
+          p -> {
+            String name = p.getFileName().toString();
+            if (name.matches("\\d+")) {
+              try {
+                uploaded.add(Integer.parseInt(name));
+                bytes[0] += Files.size(p);
+              } catch (IOException ignored) {
+              }
+            }
+          });
+    } catch (IOException e) {
+      throw new BizException("查询分片状态失败: " + e.getMessage());
+    }
+    uploaded.sort(Comparator.naturalOrder());
+    return new ChunkStatus(uploadId, uploaded, bytes[0]);
   }
 
   /**

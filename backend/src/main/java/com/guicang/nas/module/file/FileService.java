@@ -1,6 +1,7 @@
 package com.guicang.nas.module.file;
 
 import com.guicang.nas.infra.storage.FileEntry;
+import com.guicang.nas.module.file.dto.ChunkStatus;
 import com.guicang.nas.module.file.dto.DuplicateGroup;
 import com.guicang.nas.module.file.dto.FileStreamInfo;
 import java.util.List;
@@ -74,6 +75,9 @@ public interface FileService {
 
   /** 上传单个分片（大文件分片上传）。 */
   void uploadChunk(String path, String filename, String uploadId, int chunkIndex, int totalChunks, MultipartFile file);
+
+  /** 查询已上传分片（断点续传；需登录）。 */
+  ChunkStatus chunkStatus(String uploadId);
 
   /** 合并分片为完整文件（原子改名 + 建索引）。 */
   FileEntry completeChunkUpload(String path, String filename, String uploadId, int totalChunks);

@@ -196,3 +196,15 @@ export async function downloadZip(paths: string[]): Promise<void> {
   const blob = await downloadBlobPost("/files/zip", paths);
   saveBlob(blob, "guicang-download.zip");
 }
+
+/** 分片上传状态（断点续传：已传分片序号与字节数）。 */
+export interface ChunkStatus {
+  uploadId: string;
+  uploadedChunks: number[];
+  uploadedBytes: number;
+}
+
+/** 查询已上传分片（断点续传）。 */
+export function chunkStatus(uploadId: string): Promise<ChunkStatus> {
+  return get<ChunkStatus>("/files/chunk/status", { uploadId });
+}
