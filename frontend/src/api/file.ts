@@ -168,6 +168,26 @@ export function streamUrl(path: string): string {
   return `/api/v1/files/stream?path=${encodeURIComponent(path)}&token=${getToken() ?? ""}`;
 }
 
+/** 转码任务状态（与后端 TranscodeStatusVO 对应）。 */
+export interface TranscodeStatus {
+  status: "IDLE" | "RUNNING" | "DONE" | "FAILED";
+  progress: number;
+  message: string;
+  outputPath: string;
+}
+
+/** 启动视频转码为浏览器兼容版（音轨转 aac，输出 原名.compat.mp4）。 */
+export function startTranscode(path: string): Promise<TranscodeStatus> {
+  return post<TranscodeStatus>(
+    `/files/media/transcode?path=${encodeURIComponent(path)}`,
+  );
+}
+
+/** 查询视频转码状态（IDLE/RUNNING/DONE/FAILED + 进度）。 */
+export function transcodeStatus(path: string): Promise<TranscodeStatus> {
+  return get<TranscodeStatus>("/files/media/transcode/status", { path });
+}
+
 /** 带 token 的缩略图 URL。 */
 export function thumbnailUrl(path: string): string {
   return `/api/v1/files/thumbnail?path=${encodeURIComponent(path)}&token=${getToken() ?? ""}`;

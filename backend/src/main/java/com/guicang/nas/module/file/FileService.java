@@ -2,6 +2,7 @@ package com.guicang.nas.module.file;
 
 import com.guicang.nas.infra.storage.FileEntry;
 import com.guicang.nas.module.file.dto.MediaMetadataVO;
+import com.guicang.nas.module.file.dto.TranscodeStatusVO;
 import com.guicang.nas.module.file.dto.ChunkStatus;
 import com.guicang.nas.module.file.dto.DuplicateGroup;
 import com.guicang.nas.module.file.dto.FileStreamInfo;
@@ -92,4 +93,10 @@ public interface FileService {
 
   /** 获取媒体元数据（视频/音频编码与兼容性）。命中缓存则直返，否则探测后回写。 */
   MediaMetadataVO mediaMetadata(String path);
+
+  /** 启动视频转码为浏览器兼容版（音轨转 aac；输出 原名.compat.mp4；需 WRITE 权限）。 */
+  TranscodeStatusVO startTranscode(String path);
+
+  /** 查询转码状态（IDLE/RUNNING/DONE/FAILED + 进度）。 */
+  TranscodeStatusVO transcodeStatus(String path);
 }

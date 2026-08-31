@@ -3,6 +3,7 @@ package com.guicang.nas.module.file;
 import com.guicang.nas.common.Result;
 import com.guicang.nas.infra.storage.FileEntry;
 import com.guicang.nas.module.file.dto.MediaMetadataVO;
+import com.guicang.nas.module.file.dto.TranscodeStatusVO;
 import com.guicang.nas.module.file.dto.DuplicateGroup;
 import com.guicang.nas.module.file.dto.FileBatchDeleteRequest;
 import com.guicang.nas.module.file.dto.ChunkStatus;
@@ -79,6 +80,29 @@ public class FileController {
   @GetMapping("/media/inspect")
   public Result<MediaMetadataVO> mediaInspect(@RequestParam @NotBlank String path) {
     return Result.ok(fileService.mediaMetadata(path));
+  }
+
+  /**
+   * 启动视频转码为浏览器兼容版（音轨转 aac，输出 原名.compat.mp4；需 WRITE 权限）。
+   *
+   * @param path 源视频相对路径
+   * @return 转码任务状态
+   */
+  @PostMapping("/media/transcode")
+  public Result<TranscodeStatusVO> mediaTranscode(@RequestParam @NotBlank String path) {
+    return Result.ok(fileService.startTranscode(path));
+  }
+
+  /**
+   * 查询视频转码状态（IDLE/RUNNING/DONE/FAILED + 进度）。
+   *
+   * @param path 源视频相对路径
+   * @return 转码任务状态
+   */
+  @GetMapping("/media/transcode/status")
+  public Result<TranscodeStatusVO> mediaTranscodeStatus(
+      @RequestParam @NotBlank String path) {
+    return Result.ok(fileService.transcodeStatus(path));
   }
 
   /**

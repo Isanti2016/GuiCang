@@ -12,7 +12,14 @@ import {
   type CameraMeta,
   type CameraRecord,
 } from "@/api/camera";
-import { downloadFileAsBlob, mediaInspect, type MediaMetadata } from "@/api/file";
+import {
+  downloadFileAsBlob,
+  mediaInspect,
+  startTranscode,
+  transcodeStatus,
+  type MediaMetadata,
+  type TranscodeStatus,
+} from "@/api/file";
 import { useAuthStore } from "@/stores/auth";
 
 const cameras = ref<Camera[]>([]);
@@ -35,6 +42,9 @@ const playing = ref<CameraRecord | null>(null);
 
 /** 切换录像时探测编码；清空时复位。 */
 watch(playing, (r) => {
+  stopTranscodePolling();
+  transcodeJob.value = null;
+  activePlayPath.value = null;
   if (r) void inspectMediaForRecord(r.path);
   else mediaMeta.value = null;
 });
@@ -169,7 +179,8 @@ function play(record: CameraRecord): void {
 function streamUrl(record: CameraRecord): string {
   // 通过 query 参数携带 JWT 给 <video> 标签，避开 video 标签不能设 Authorization 头的限制
   const token = useAuthStore().token || "";
-  return `/api/v1/files/stream?path=${encodeURIComponent(record.path)}&token=${encodeURIComponent(token)}`;
+  const p = activePlayPath.value ?? record.path;
+  return `/api/v1/files/stream?path=${encodeURIComponent(p)}&token=${encodeURIComponent(token)}`;
 }
 
 const videoEl = ref<HTMLVideoElement | null>(null);
@@ -178,6 +189,14 @@ const videoRate = ref(1);
 const VIDEO_RATES = [0.5, 1, 1.5, 2];
 const mediaMeta = ref<MediaMetadata | null>(null);
 let mediaInspectSeq = 0;
+/** 转码任务状态（null=未开始）。 */
+const transcodeJob = ref<TranscodeStatus | null>(null);
+/** 转码轮询定时器。 */
+let transcodeTimer: number | null = null;
+/** 兼容版播放路径（转码完成后切到 compat 文件）。 */
+const activePlayPath = ref<string | null>(null);
+/** 是否正在转码。 */
+const transcoding = computed(() => transcodeJob.value?.status === "RUNNING");
 
 function cycleVideoRate(): void {
   const i = VIDEO_RATES.indexOf(videoRate.value);
@@ -204,6 +223,59 @@ async function inspectMediaForRecord(path: string): Promise<void> {
   }
 }
 
+/** 停止转码轮询。 */
+function stopTranscodePolling(): void {
+  if (transcodeTimer) {
+    window.clearInterval(transcodeTimer);
+    transcodeTimer = null;
+  }
+}
+
+/** 启动「转码兼容版」并轮询进度。 */
+async function startCompatTranscode(): Promise<void> {
+  const r = playing.value;
+  if (!r) return;
+  stopTranscodePolling();
+  try {
+    const job = await startTranscode(r.path);
+    transcodeJob.value = job;
+    if (job.status === "DONE") {
+      onCompatReady(job.outputPath);
+      return;
+    }
+    if (job.status === "FAILED") {
+      ElMessage.error(job.message || "转码失败，请查看服务器日志");
+      return;
+    }
+    transcodeTimer = window.setInterval(async () => {
+      try {
+        const s = await transcodeStatus(r.path);
+        transcodeJob.value = s;
+        if (s.status === "DONE") {
+          stopTranscodePolling();
+          onCompatReady(s.outputPath);
+        } else if (s.status === "FAILED") {
+          stopTranscodePolling();
+          ElMessage.error(s.message || "转码失败，请查看服务器日志");
+        }
+      } catch {
+        stopTranscodePolling();
+        ElMessage.error("转码状态查询失败");
+      }
+    }, 2000);
+  } catch {
+    /* http 层已提示 */
+  }
+}
+
+/** 转码完成：切到 compat 文件播放 + 重新探测编码。 */
+function onCompatReady(outputPath: string): void {
+  activePlayPath.value = outputPath;
+  transcodeJob.value = { status: "DONE", progress: 100, message: "", outputPath };
+  ElMessage.success("兼容版已生成，正在播放");
+  if (playing.value) void inspectMediaForRecord(outputPath);
+}
+
 /** 监控视频弹窗关闭时销毁 video，避免后台继续下载/播声音。 */
 function disposePlaying(): void {
   if (videoEl.value) {
@@ -212,7 +284,10 @@ function disposePlaying(): void {
     videoEl.value.load();
   }
   if (document.fullscreenElement) void document.exitFullscreen().catch(() => {});
+  stopTranscodePolling();
   mediaMeta.value = null;
+  transcodeJob.value = null;
+  activePlayPath.value = null;
 }
 
 /** 全屏切换。 */
@@ -427,7 +502,24 @@ onMounted(async () => {
           <strong>⚠️ 该录像可能无法播放</strong>
           <span v-if="mediaMeta.browserAudioSupported === false">音轨编码 <code>{{ mediaMeta.audioCodec }}</code>（AC-3/EAC3 等）浏览器不解码，画面有但无声音</span>
           <span v-else>视频编码 <code>{{ mediaMeta.videoCodec }}</code> 浏览器不支持</span>
-          <span class="cameras__codec-hint-tip">建议「下载」后用 VLC 等本地播放器</span>
+          <span class="cameras__codec-hint-tip">可点击「转码兼容版」生成浏览器可播的副本</span>
+          <div class="cameras__codec-hint-actions">
+            <el-button
+              size="small"
+              type="primary"
+              :loading="transcoding"
+              :disabled="transcodeJob?.status === 'DONE'"
+              @click="startCompatTranscode"
+            >
+              {{ transcodeJob?.status === 'DONE' ? '兼容版已生成' : transcodeJob?.status === 'FAILED' ? '重试转码' : '转码兼容版' }}
+            </el-button>
+            <el-progress
+              v-if="transcoding"
+              class="cameras__codec-hint-progress"
+              :percentage="transcodeJob?.progress ?? 0"
+              :stroke-width="6"
+            />
+          </div>
         </template>
         <template v-else>
           编码：<code>{{ mediaMeta.videoCodec || '?' }}</code> + <code>{{ mediaMeta.audioCodec || '无音轨' }}</code> · 容器 {{ mediaMeta.container }}
@@ -701,6 +793,16 @@ onMounted(async () => {
   margin-bottom: 4px;
 }
 
+.cameras__codec-hint-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 8px;
+}
+.cameras__codec-hint-progress {
+  flex: 1;
+  max-width: 220px;
+}
 .cameras__codec-hint-tip {
   display: block;
   font-style: italic;

@@ -7,10 +7,13 @@ import {
   fetchMedia,
   downloadFileAsBlob,
   mediaInspect,
+  startTranscode,
   streamUrl,
   thumbnailUrl,
+  transcodeStatus,
   type FileEntry,
   type MediaMetadata,
+  type TranscodeStatus,
 } from "@/api/file";
 
 const entries = ref<FileEntry[]>([]);
@@ -146,6 +149,14 @@ const VIDEO_RATES = [0.5, 1, 1.5, 2];
 const mediaMeta = ref<MediaMetadata | null>(null);
 /** 切换灯箱项时计数器，避免慢请求回写覆盖新状态。 */
 let mediaInspectSeq = 0;
+/** 转码任务状态（null=未开始）。 */
+const transcodeJob = ref<TranscodeStatus | null>(null);
+/** 转码轮询定时器。 */
+let transcodeTimer: number | null = null;
+/** 兼容版播放路径（转码完成后切到 compat 文件）。 */
+const activePlayPath = ref<string | null>(null);
+/** 是否正在转码（按钮 loading + 进度条）。 */
+const transcoding = computed(() => transcodeJob.value?.status === "RUNNING");
 
 function cycleVideoRate(): void {
   const i = VIDEO_RATES.indexOf(videoRate.value);
@@ -173,13 +184,67 @@ async function inspectMedia(): Promise<void> {
   const c = current.value;
   if (!c || c.kind !== "video") return;
   const seq = ++mediaInspectSeq;
+  const probePath = activePlayPath.value ?? c.path;
   try {
-    const m = await mediaInspect(c.path);
+    const m = await mediaInspect(probePath);
     if (seq !== mediaInspectSeq) return;
     mediaMeta.value = m;
   } catch {
     if (seq === mediaInspectSeq) mediaMeta.value = null;
   }
+}
+
+/** 停止转码轮询。 */
+function stopTranscodePolling(): void {
+  if (transcodeTimer) {
+    window.clearInterval(transcodeTimer);
+    transcodeTimer = null;
+  }
+}
+
+/** 启动「转码兼容版」：调用后端 ffmpeg 任务并轮询进度。 */
+async function startCompatTranscode(): Promise<void> {
+  const c = current.value;
+  if (!c || c.kind !== "video") return;
+  stopTranscodePolling();
+  try {
+    const job = await startTranscode(c.path);
+    transcodeJob.value = job;
+    if (job.status === "DONE") {
+      onCompatReady(job.outputPath);
+      return;
+    }
+    if (job.status === "FAILED") {
+      ElMessage.error(job.message || "转码失败，请查看服务器日志");
+      return;
+    }
+    transcodeTimer = window.setInterval(async () => {
+      try {
+        const s = await transcodeStatus(c.path);
+        transcodeJob.value = s;
+        if (s.status === "DONE") {
+          stopTranscodePolling();
+          onCompatReady(s.outputPath);
+        } else if (s.status === "FAILED") {
+          stopTranscodePolling();
+          ElMessage.error(s.message || "转码失败，请查看服务器日志");
+        }
+      } catch {
+        stopTranscodePolling();
+        ElMessage.error("转码状态查询失败");
+      }
+    }, 2000);
+  } catch {
+    /* http 层已提示 */
+  }
+}
+
+/** 转码完成：切到 compat 文件播放 + 重新探测编码（aac 应支持）。 */
+function onCompatReady(outputPath: string): void {
+  activePlayPath.value = outputPath;
+  transcodeJob.value = { status: "DONE", progress: 100, message: "", outputPath };
+  ElMessage.success("兼容版已生成，正在播放");
+  void inspectMedia();
 }
 
 /** 灯箱关闭：彻底销毁视频元素，避免后台音频残留 / 继续下载。 */
@@ -190,7 +255,10 @@ function disposeVideo(): void {
     videoEl.value.load();
   }
   if (document.fullscreenElement) void document.exitFullscreen().catch(() => {});
+  stopTranscodePolling();
   mediaMeta.value = null;
+  transcodeJob.value = null;
+  activePlayPath.value = null;
 }
 
 /** 全屏切换：容器元素 requestFullscreen，否则提示。 */
@@ -248,6 +316,9 @@ const currentName = computed(() => current.value?.name ?? "");
 
 /** 灯箱项变更：视频即探测编码，其他清空。 */
 watch(current, (v) => {
+  stopTranscodePolling();
+  transcodeJob.value = null;
+  activePlayPath.value = null;
   if (v?.kind === "video") void inspectMedia();
   else mediaMeta.value = null;
 });
@@ -424,7 +495,26 @@ onBeforeUnmount(() => {
               </span>
               <span> · 容器 {{ mediaMeta.container }} · {{ Math.floor(mediaMeta.durationSec / 60) }} 分 {{ Math.floor(mediaMeta.durationSec % 60) }} 秒</span>
             </div>
-            <div class="gallery__codec-hint-tip">建议点击「下载」后用 VLC 等本地播放器观看</div>
+            <div class="gallery__codec-hint-tip">
+              可点击「转码兼容版」生成浏览器可播的副本（视频不重编码，仅音轨转 aac）
+            </div>
+            <div class="gallery__codec-hint-actions">
+              <el-button
+                size="small"
+                type="primary"
+                :loading="transcoding"
+                :disabled="transcodeJob?.status === 'DONE'"
+                @click="startCompatTranscode"
+              >
+                {{ transcodeJob?.status === 'DONE' ? '兼容版已生成' : transcodeJob?.status === 'FAILED' ? '重试转码' : '转码兼容版' }}
+              </el-button>
+              <el-progress
+                v-if="transcoding"
+                class="gallery__codec-hint-progress"
+                :percentage="transcodeJob?.progress ?? 0"
+                :stroke-width="6"
+              />
+            </div>
           </template>
           <template v-else>
             编码：<code>{{ mediaMeta.videoCodec || '?' }}</code> + <code>{{ mediaMeta.audioCodec || '无音轨' }}</code> · 容器 {{ mediaMeta.container }}
@@ -445,7 +535,7 @@ onBeforeUnmount(() => {
         />
         <video
           v-else-if="current?.kind === 'video'"
-          :src="current ? streamUrl(current.path) : ''"
+          :src="current ? streamUrl(activePlayPath ?? current.path) : ''"
           controls
           autoplay
           ref="videoEl"
@@ -830,6 +920,16 @@ onBeforeUnmount(() => {
   margin-bottom: 4px;
 }
 
+.gallery__codec-hint-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 8px;
+}
+.gallery__codec-hint-progress {
+  flex: 1;
+  max-width: 220px;
+}
 .gallery__codec-hint-tip {
   font-style: italic;
   opacity: 0.85;

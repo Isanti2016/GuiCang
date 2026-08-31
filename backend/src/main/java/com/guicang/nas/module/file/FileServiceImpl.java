@@ -14,6 +14,7 @@ import com.guicang.nas.module.file.dto.ChunkStatus;
 import com.guicang.nas.module.file.dto.DuplicateGroup;
 import com.guicang.nas.module.file.dto.FileStreamInfo;
 import com.guicang.nas.module.file.dto.MediaMetadataVO;
+import com.guicang.nas.module.file.dto.TranscodeStatusVO;
 import com.guicang.nas.module.user.SysUser;
 import com.guicang.nas.module.user.UserService;
 import java.io.IOException;
@@ -55,6 +56,7 @@ public class FileServiceImpl implements FileService {
   private final UserService userService;
   private final MediaInspectService mediaInspectService;
   private final FileIndexMapper fileIndexMapper;
+  private final MediaTranscodeService mediaTranscodeService;
 
   @Value("${guicang.file.max-upload-size-bytes:1073741824}")
   private long maxUploadSizeBytes;
@@ -77,7 +79,8 @@ public class FileServiceImpl implements FileService {
       FileVersionMapper fileVersionMapper,
       UserService userService,
       MediaInspectService mediaInspectService,
-      FileIndexMapper fileIndexMapper) {
+      FileIndexMapper fileIndexMapper,
+      MediaTranscodeService mediaTranscodeService) {
     this.storageService = storageService;
     this.dirPermissionService = dirPermissionService;
     this.thumbnailService = thumbnailService;
@@ -87,6 +90,7 @@ public class FileServiceImpl implements FileService {
     this.userService = userService;
     this.mediaInspectService = mediaInspectService;
     this.fileIndexMapper = fileIndexMapper;
+    this.mediaTranscodeService = mediaTranscodeService;
   }
 
   /**
@@ -401,6 +405,32 @@ public class FileServiceImpl implements FileService {
     MediaMetadataVO vo = mediaInspectService.probe(file);
     mediaInspectService.writeToCache(path, vo);
     return vo;
+  }
+
+  /**
+   * 启动视频转码为浏览器兼容版（音轨转 aac，视频流 copy；输出 原名.compat.mp4）。
+   *
+   * @param path 源视频相对路径
+   * @return 转码任务状态（可能已存在 compat 直接 DONE）
+   */
+  @Override
+  public TranscodeStatusVO startTranscode(String path) {
+    AuthenticatedUser user = requireUser();
+    dirPermissionService.check(user.username(), authorities(), path, DirPerm.WRITE);
+    return mediaTranscodeService.start(path);
+  }
+
+  /**
+   * 查询转码状态（IDLE/RUNNING/DONE/FAILED + 进度百分比）。
+   *
+   * @param path 源视频相对路径
+   * @return 转码任务状态
+   */
+  @Override
+  public TranscodeStatusVO transcodeStatus(String path) {
+    AuthenticatedUser user = requireUser();
+    dirPermissionService.check(user.username(), authorities(), path, DirPerm.READ);
+    return mediaTranscodeService.status(path);
   }
 
   /**

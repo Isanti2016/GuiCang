@@ -157,8 +157,12 @@ public class MediaInspectService {
         bv);
   }
 
-  /** 写入/覆盖缓存。空字符串也写入，等价「已探测」标记。 */
+  /** 写入/覆盖缓存。空字符串也写入，等价「已探测」标记。探测失败（container 以 ffprobe_ 开头）不写缓存。 */
   public void writeToCache(String relativePath, MediaMetadataVO vo) {
+    if (vo.container() != null && vo.container().startsWith("ffprobe_")) {
+      log.debug("探测失败结果不写缓存: {} -> {}", relativePath, vo.container());
+      return;
+    }
     try {
       MediaMetadataCache row = new MediaMetadataCache();
       row.setPath(relativePath);
