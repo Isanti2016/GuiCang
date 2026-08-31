@@ -1,14 +1,16 @@
 <script setup lang="ts">
 import { ElMessage, ElMessageBox } from "element-plus";
-import { computed, onBeforeUnmount, onMounted, ref } from "vue";
-import { Download } from "@element-plus/icons-vue";
+import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { Download, FullScreen } from "@element-plus/icons-vue";
 import {
   batchDelete,
   fetchMedia,
   downloadFileAsBlob,
+  mediaInspect,
   streamUrl,
   thumbnailUrl,
   type FileEntry,
+  type MediaMetadata,
 } from "@/api/file";
 
 const entries = ref<FileEntry[]>([]);
@@ -137,8 +139,13 @@ function next(): void {
 }
 
 const videoEl = ref<HTMLVideoElement | null>(null);
+const lightboxContainer = ref<HTMLElement | null>(null);
 const videoRate = ref(1);
 const VIDEO_RATES = [0.5, 1, 1.5, 2];
+/** 媒体元数据（首次打开视频时探测，命中缓存秒返）。 */
+const mediaMeta = ref<MediaMetadata | null>(null);
+/** 切换灯箱项时计数器，避免慢请求回写覆盖新状态。 */
+let mediaInspectSeq = 0;
 
 function cycleVideoRate(): void {
   const i = VIDEO_RATES.indexOf(videoRate.value);
@@ -159,6 +166,45 @@ function toggleVideoPlay(): void {
 
 function onVideoError(): void {
   ElMessage.warning("该视频编码浏览器可能不支持，可点击「下载」后用本地播放器观看");
+}
+
+/** 探测媒体编码（ffprobe，结果缓存）。同 path 重复点击只跑一次。 */
+async function inspectMedia(): Promise<void> {
+  const c = current.value;
+  if (!c || c.kind !== "video") return;
+  const seq = ++mediaInspectSeq;
+  try {
+    const m = await mediaInspect(c.path);
+    if (seq !== mediaInspectSeq) return;
+    mediaMeta.value = m;
+  } catch {
+    if (seq === mediaInspectSeq) mediaMeta.value = null;
+  }
+}
+
+/** 灯箱关闭：彻底销毁视频元素，避免后台音频残留 / 继续下载。 */
+function disposeVideo(): void {
+  if (videoEl.value) {
+    videoEl.value.pause();
+    videoEl.value.removeAttribute("src");
+    videoEl.value.load();
+  }
+  if (document.fullscreenElement) void document.exitFullscreen().catch(() => {});
+  mediaMeta.value = null;
+}
+
+/** 全屏切换：容器元素 requestFullscreen，否则提示。 */
+function toggleFullscreen(): void {
+  if (document.fullscreenElement) {
+    void document.exitFullscreen().catch(() => {});
+    return;
+  }
+  const el = lightboxContainer.value;
+  if (el && el.requestFullscreen) {
+    void el.requestFullscreen().catch((e) => ElMessage.warning("全屏失败：" + (e?.message || "未知")));
+  } else {
+    ElMessage.warning("当前浏览器不支持 Fullscreen API");
+  }
 }
 
 async function downloadCurrent(): Promise<void> {
@@ -199,6 +245,12 @@ const current = computed<FileEntry | null>(
   () => lightboxList.value[lightboxIndex.value] ?? null,
 );
 const currentName = computed(() => current.value?.name ?? "");
+
+/** 灯箱项变更：视频即探测编码，其他清空。 */
+watch(current, (v) => {
+  if (v?.kind === "video") void inspectMedia();
+  else mediaMeta.value = null;
+});
 
 /** 加载全部图片/视频（递归收集）。 */
 async function load(): Promise<void> {
@@ -350,11 +402,34 @@ onBeforeUnmount(() => {
       :show-close="true"
       append-to-body
       align-center
+      @close="disposeVideo"
     >
       <template #header>
         <span class="gallery__lightbox-title">{{ currentName }}</span>
       </template>
-      <div class="gallery__lightbox-body">
+      <div ref="lightboxContainer" class="gallery__lightbox-body">
+        <div
+          v-if="current?.kind === 'video' && mediaMeta"
+          class="gallery__codec-hint"
+          :class="{ 'gallery__codec-hint--warn': mediaMeta.browserAudioSupported === false || mediaMeta.browserVideoSupported === false }"
+        >
+          <template v-if="mediaMeta.browserAudioSupported === false || mediaMeta.browserVideoSupported === false">
+            <strong>⚠️ 当前浏览器可能无法播放该视频</strong>
+            <div class="gallery__codec-hint-detail">
+              <span v-if="mediaMeta.browserAudioSupported === false">
+                音轨编码 <code>{{ mediaMeta.audioCodec }}</code>（如 AC-3/EAC3/DTS/TrueHD）Chrome/Edge 不解码，画面会有但无声音
+              </span>
+              <span v-if="mediaMeta.browserVideoSupported === false">
+                视频编码 <code>{{ mediaMeta.videoCodec }}</code> 浏览器不支持
+              </span>
+              <span> · 容器 {{ mediaMeta.container }} · {{ Math.floor(mediaMeta.durationSec / 60) }} 分 {{ Math.floor(mediaMeta.durationSec % 60) }} 秒</span>
+            </div>
+            <div class="gallery__codec-hint-tip">建议点击「下载」后用 VLC 等本地播放器观看</div>
+          </template>
+          <template v-else>
+            编码：<code>{{ mediaMeta.videoCodec || '?' }}</code> + <code>{{ mediaMeta.audioCodec || '无音轨' }}</code> · 容器 {{ mediaMeta.container }}
+          </template>
+        </div>
         <button
           class="gallery__nav gallery__nav--prev"
           aria-label="上一张"
@@ -390,6 +465,9 @@ onBeforeUnmount(() => {
             @click="downloadCurrent"
           >
             下载
+          </el-button>
+          <el-button size="small" :icon="FullScreen" @click="toggleFullscreen">
+            全屏
           </el-button>
         </div>
         <button
@@ -716,4 +794,45 @@ onBeforeUnmount(() => {
     right: 4px;
   }
 }
+
+.gallery__codec-hint {
+  margin: 0 12px 12px;
+  padding: 10px 14px;
+  border-radius: 6px;
+  background: rgba(99, 99, 99, 0.12);
+  border-left: 3px solid #909399;
+  font-size: 13px;
+  line-height: 1.5;
+  color: #c0c4cc;
+}
+
+.gallery__codec-hint code {
+  background: rgba(0, 0, 0, 0.25);
+  padding: 1px 6px;
+  border-radius: 3px;
+  font-family: "JetBrains Mono", Consolas, monospace;
+  color: #f89898;
+}
+
+.gallery__codec-hint--warn {
+  background: rgba(245, 108, 108, 0.15);
+  border-left-color: #f56c6c;
+  color: #fef0f0;
+}
+
+.gallery__codec-hint--warn strong {
+  color: #f56c6c;
+  display: block;
+  margin-bottom: 4px;
+}
+
+.gallery__codec-hint-detail {
+  margin-bottom: 4px;
+}
+
+.gallery__codec-hint-tip {
+  font-style: italic;
+  opacity: 0.85;
+}
+
 </style>

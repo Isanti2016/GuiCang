@@ -37,4 +37,13 @@ public class FileIndex {
 
   /** 文本内容（md/txt 全文索引用，其余类型为空）。 */
   private String content;
+
+  /** 首选音轨编码（如 aac/mp3/eac3/opus）；无音轨或未探测时空。 */
+  private String audioCodec;
+
+  /** 首选视频编码（如 h264/hevc/vp9/av1）。 */
+  private String videoCodec;
+
+  /** 时长（秒）；不可靠时为空。 */
+  private Long durationSec;
 }

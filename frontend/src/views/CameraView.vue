@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ElMessage, ElMessageBox } from "element-plus";
-import { computed, onMounted, ref } from "vue";
-import { Download } from "@element-plus/icons-vue";
+import { computed, onMounted, ref, watch } from "vue";
+import { Download, FullScreen } from "@element-plus/icons-vue";
 import {
   deleteCamera,
   fetchCameraMeta,
@@ -12,7 +12,7 @@ import {
   type CameraMeta,
   type CameraRecord,
 } from "@/api/camera";
-import { downloadFileAsBlob } from "@/api/file";
+import { downloadFileAsBlob, mediaInspect, type MediaMetadata } from "@/api/file";
 import { useAuthStore } from "@/stores/auth";
 
 const cameras = ref<Camera[]>([]);
@@ -32,6 +32,12 @@ const editing = ref<{ id?: number; name: string; location: string }>({
 
 const playDialog = ref(false);
 const playing = ref<CameraRecord | null>(null);
+
+/** 切换录像时探测编码；清空时复位。 */
+watch(playing, (r) => {
+  if (r) void inspectMediaForRecord(r.path);
+  else mediaMeta.value = null;
+});
 
 const hasCameras = computed(() => cameras.value.length > 0);
 
@@ -167,8 +173,11 @@ function streamUrl(record: CameraRecord): string {
 }
 
 const videoEl = ref<HTMLVideoElement | null>(null);
+const playDialogContainer = ref<HTMLElement | null>(null);
 const videoRate = ref(1);
 const VIDEO_RATES = [0.5, 1, 1.5, 2];
+const mediaMeta = ref<MediaMetadata | null>(null);
+let mediaInspectSeq = 0;
 
 function cycleVideoRate(): void {
   const i = VIDEO_RATES.indexOf(videoRate.value);
@@ -183,6 +192,41 @@ function seekVideo(ds: number): void {
 
 function onVideoError(): void {
   ElMessage.warning("该视频编码浏览器可能不支持，可点击「下载」后用本地播放器观看");
+}
+
+async function inspectMediaForRecord(path: string): Promise<void> {
+  const seq = ++mediaInspectSeq;
+  try {
+    const m = await mediaInspect(path);
+    if (seq === mediaInspectSeq) mediaMeta.value = m;
+  } catch {
+    if (seq === mediaInspectSeq) mediaMeta.value = null;
+  }
+}
+
+/** 监控视频弹窗关闭时销毁 video，避免后台继续下载/播声音。 */
+function disposePlaying(): void {
+  if (videoEl.value) {
+    videoEl.value.pause();
+    videoEl.value.removeAttribute("src");
+    videoEl.value.load();
+  }
+  if (document.fullscreenElement) void document.exitFullscreen().catch(() => {});
+  mediaMeta.value = null;
+}
+
+/** 全屏切换。 */
+function toggleFullscreen(): void {
+  if (document.fullscreenElement) {
+    void document.exitFullscreen().catch(() => {});
+    return;
+  }
+  const el = playDialogContainer.value;
+  if (el && el.requestFullscreen) {
+    void el.requestFullscreen().catch((e) => ElMessage.warning("全屏失败：" + (e?.message || "未知")));
+  } else {
+    ElMessage.warning("当前浏览器不支持 Fullscreen API");
+  }
 }
 
 async function downloadPlaying(): Promise<void> {
@@ -363,6 +407,7 @@ onMounted(async () => {
       width="720px"
       append-to-body
       destroy-on-close
+      @close="disposePlaying"
     >
       <video
         v-if="playing"
@@ -373,7 +418,22 @@ onMounted(async () => {
         @error="onVideoError"
         class="cameras__video"
       />
-      <div v-if="playing" class="cameras__video-tools">
+      <div
+        v-if="playing && mediaMeta"
+        class="cameras__codec-hint"
+        :class="{ 'cameras__codec-hint--warn': mediaMeta.browserAudioSupported === false || mediaMeta.browserVideoSupported === false }"
+      >
+        <template v-if="mediaMeta.browserAudioSupported === false || mediaMeta.browserVideoSupported === false">
+          <strong>⚠️ 该录像可能无法播放</strong>
+          <span v-if="mediaMeta.browserAudioSupported === false">音轨编码 <code>{{ mediaMeta.audioCodec }}</code>（AC-3/EAC3 等）浏览器不解码，画面有但无声音</span>
+          <span v-else>视频编码 <code>{{ mediaMeta.videoCodec }}</code> 浏览器不支持</span>
+          <span class="cameras__codec-hint-tip">建议「下载」后用 VLC 等本地播放器</span>
+        </template>
+        <template v-else>
+          编码：<code>{{ mediaMeta.videoCodec || '?' }}</code> + <code>{{ mediaMeta.audioCodec || '无音轨' }}</code> · 容器 {{ mediaMeta.container }}
+        </template>
+      </div>
+      <div ref="playDialogContainer" v-if="playing" class="cameras__video-tools">
         <el-button size="small" @click="seekVideo(-10)">-10s</el-button>
         <el-button size="small" @click="seekVideo(-5)">-5s</el-button>
         <el-button size="small" @click="cycleVideoRate">{{ videoRate }}x</el-button>
@@ -386,6 +446,9 @@ onMounted(async () => {
           @click="downloadPlaying"
         >
           下载
+        </el-button>
+        <el-button size="small" :icon="FullScreen" @click="toggleFullscreen">
+          全屏
         </el-button>
       </div>
     </el-dialog>
@@ -606,4 +669,43 @@ onMounted(async () => {
   border-radius: 8px;
   background: #000;
 }
+
+.cameras__codec-hint {
+  margin-top: 12px;
+  padding: 10px 14px;
+  border-radius: 6px;
+  background: rgba(99, 99, 99, 0.12);
+  border-left: 3px solid #909399;
+  font-size: 13px;
+  line-height: 1.5;
+  color: #c0c4cc;
+}
+
+.cameras__codec-hint code {
+  background: rgba(0, 0, 0, 0.25);
+  padding: 1px 6px;
+  border-radius: 3px;
+  font-family: "JetBrains Mono", Consolas, monospace;
+  color: #f89898;
+}
+
+.cameras__codec-hint--warn {
+  background: rgba(245, 108, 108, 0.15);
+  border-left-color: #f56c6c;
+  color: #fef0f0;
+}
+
+.cameras__codec-hint--warn strong {
+  color: #f56c6c;
+  display: block;
+  margin-bottom: 4px;
+}
+
+.cameras__codec-hint-tip {
+  display: block;
+  font-style: italic;
+  opacity: 0.85;
+  margin-top: 4px;
+}
+
 </style>

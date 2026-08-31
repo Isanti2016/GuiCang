@@ -13,6 +13,7 @@ import com.guicang.nas.infra.thumbnail.ThumbnailService;
 import com.guicang.nas.module.file.dto.ChunkStatus;
 import com.guicang.nas.module.file.dto.DuplicateGroup;
 import com.guicang.nas.module.file.dto.FileStreamInfo;
+import com.guicang.nas.module.file.dto.MediaMetadataVO;
 import com.guicang.nas.module.user.SysUser;
 import com.guicang.nas.module.user.UserService;
 import java.io.IOException;
@@ -52,6 +53,8 @@ public class FileServiceImpl implements FileService {
   private final TrashItemMapper trashItemMapper;
   private final FileVersionMapper fileVersionMapper;
   private final UserService userService;
+  private final MediaInspectService mediaInspectService;
+  private final FileIndexMapper fileIndexMapper;
 
   @Value("${guicang.file.max-upload-size-bytes:1073741824}")
   private long maxUploadSizeBytes;
@@ -72,7 +75,9 @@ public class FileServiceImpl implements FileService {
       FileIndexService fileIndexService,
       TrashItemMapper trashItemMapper,
       FileVersionMapper fileVersionMapper,
-      UserService userService) {
+      UserService userService,
+      MediaInspectService mediaInspectService,
+      FileIndexMapper fileIndexMapper) {
     this.storageService = storageService;
     this.dirPermissionService = dirPermissionService;
     this.thumbnailService = thumbnailService;
@@ -80,6 +85,8 @@ public class FileServiceImpl implements FileService {
     this.trashItemMapper = trashItemMapper;
     this.fileVersionMapper = fileVersionMapper;
     this.userService = userService;
+    this.mediaInspectService = mediaInspectService;
+    this.fileIndexMapper = fileIndexMapper;
   }
 
   /**
@@ -376,6 +383,55 @@ public class FileServiceImpl implements FileService {
     } catch (IOException e) {
       throw new BizException("读取文件信息失败: " + path);
     }
+  }
+
+  /**
+   * 获取媒体元数据。命中缓存（file_index.audio_codec 非空）直接返回；否则调 ffprobe 探测并回写索引。
+   *
+   * @param path 相对路径
+   * @return 媒体元数据
+   */
+  @Override
+  public MediaMetadataVO mediaMetadata(String path) {
+    AuthenticatedUser user = requireUser();
+    dirPermissionService.check(user.username(), authorities(), path, DirPerm.READ);
+    Path file = storageService.resolveFile(path);
+    FileIndex cached = fileIndexMapper.selectOne(
+        new LambdaQueryWrapper<FileIndex>().eq(FileIndex::getPath, path));
+    if (cached != null
+        && cached.getAudioCodec() != null
+        && !cached.getAudioCodec().isBlank()
+        && cached.getVideoCodec() != null
+        && !cached.getVideoCodec().isBlank()) {
+      long dur = cached.getDurationSec() == null ? 0L : cached.getDurationSec();
+      Set<String> audioAll =
+          cached.getAudioCodec().isBlank() ? java.util.Set.of() : java.util.Set.of(cached.getAudioCodec());
+      java.util.List<String> audios = new java.util.ArrayList<>(audioAll);
+      java.util.List<String> videos =
+          cached.getVideoCodec().isBlank() ? java.util.List.of() : java.util.List.of(cached.getVideoCodec());
+      Boolean ba = cached.getAudioCodec().isBlank() ? null : MediaInspectService.AUDIO_SUPPORTED.contains(cached.getAudioCodec());
+      Boolean bv = cached.getVideoCodec().isBlank() ? null : MediaInspectService.VIDEO_SUPPORTED.contains(cached.getVideoCodec());
+      return new MediaMetadataVO(
+          cached.getExt() == null ? "" : cached.getExt(),
+          cached.getVideoCodec(),
+          cached.getAudioCodec(),
+          audios,
+          videos,
+          dur,
+          0,
+          0,
+          false,
+          ba,
+          bv);
+    }
+    MediaMetadataVO vo = mediaInspectService.probe(file);
+    if (cached != null) {
+      cached.setAudioCodec(vo.audioCodec());
+      cached.setVideoCodec(vo.videoCodec());
+      cached.setDurationSec(vo.durationSec() == 0 ? null : vo.durationSec());
+      fileIndexMapper.updateById(cached);
+    }
+    return vo;
   }
 
   /**

@@ -1,6 +1,7 @@
 package com.guicang.nas.module.file;
 
 import com.guicang.nas.infra.storage.FileEntry;
+import com.guicang.nas.module.file.dto.MediaMetadataVO;
 import com.guicang.nas.module.file.dto.ChunkStatus;
 import com.guicang.nas.module.file.dto.DuplicateGroup;
 import com.guicang.nas.module.file.dto.FileStreamInfo;
@@ -88,4 +89,7 @@ public interface FileService {
 
   /** 递归收集目录下图片/视频（相册数据源；需 READ 权限；限制深度与数量）。 */
   List<FileEntry> media(String path);
+
+  /** 获取媒体元数据（视频/音频编码与兼容性）。命中缓存则直返，否则探测后回写。 */
+  MediaMetadataVO mediaMetadata(String path);
 }

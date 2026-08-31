@@ -131,6 +131,38 @@ export function fetchMedia(path = ""): Promise<FileEntry[]> {
   return get<FileEntry[]>("/files/media", { path });
 }
 
+/** 浏览器原生支持的音轨编码（与后端 MediaInspectService.AUDIO_SUPPORTED 对齐）。 */
+export const BROWSER_AUDIO_SUPPORTED = new Set<string>([
+  "aac", "mp3", "opus", "vorbis", "flac",
+  "pcm_mulaw", "pcm_alaw", "pcm_s8", "pcm_u8",
+  "pcm_s16le", "pcm_s16be", "pcm_s24le", "pcm_s24be",
+  "pcm_s32le", "pcm_s32be", "pcm_f32le", "pcm_f64le",
+]);
+
+/** 媒体元数据（与后端 MediaMetadataVO 对齐，浏览器原生兼容性前端二次校验）。 */
+export interface MediaMetadata {
+  container: string;
+  videoCodec: string;
+  audioCodec: string;
+  audioCodecs: string[];
+  videoCodecs: string[];
+  durationSec: number;
+  width: number;
+  height: number;
+  hasSubtitle: boolean;
+  browserAudioSupported: boolean | null;
+  browserVideoSupported: boolean | null;
+}
+
+/** 获取媒体元数据（编码 + 浏览器兼容性）。首次会触发后端 ffprobe 并回写索引缓存。 */
+export function mediaInspect(path: string): Promise<MediaMetadata> {
+  return get<MediaMetadata>("/files/media/inspect", { path });
+}
+
+/** 浏览器原生支持的音轨编码（与后端 MediaInspectService.AUDIO_SUPPORTED 对齐）。 */
+
+/** 浏览器原生支持的音轨编码（与后端 MediaInspectService.AUDIO_SUPPORTED 对齐）。 */
+
 /** 带 token 的流媒体 URL（img/video 标签用）。 */
 export function streamUrl(path: string): string {
   return `/api/v1/files/stream?path=${encodeURIComponent(path)}&token=${getToken() ?? ""}`;

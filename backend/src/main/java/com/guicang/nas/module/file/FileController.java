@@ -2,6 +2,7 @@ package com.guicang.nas.module.file;
 
 import com.guicang.nas.common.Result;
 import com.guicang.nas.infra.storage.FileEntry;
+import com.guicang.nas.module.file.dto.MediaMetadataVO;
 import com.guicang.nas.module.file.dto.DuplicateGroup;
 import com.guicang.nas.module.file.dto.FileBatchDeleteRequest;
 import com.guicang.nas.module.file.dto.ChunkStatus;
@@ -67,6 +68,17 @@ public class FileController {
   @GetMapping("/media")
   public Result<List<FileEntry>> media(@RequestParam(defaultValue = "") String path) {
     return Result.ok(fileService.media(path));
+  }
+
+  /**
+   * 媒体元数据探测（前端播放前调用，判断浏览器音视频兼容性）。
+   *
+   * @param path 文件相对路径
+   * @return 媒体元数据（容器、编码、时长、浏览器兼容性）
+   */
+  @GetMapping("/media/inspect")
+  public Result<MediaMetadataVO> mediaInspect(@RequestParam @NotBlank String path) {
+    return Result.ok(fileService.mediaMetadata(path));
   }
 
   /**
