@@ -20,6 +20,7 @@
 - **磁盘配额**：按用户配额拦截（上传超限拒绝）
 - **WebDAV**：Basic Auth（PAM）+ PROPFIND/GET/PUT/MKCOL/DELETE/MOVE，第三方客户端（Windows/macOS/手机）直接挂载 /dav/
 - **监控录像**：接收目录自动归档（按 摄像头/日期，摄像头自动注册），Web 端按摄像头+日期浏览播放（Range 流式）；接入说明见 docs/监控录像接入.md
+- **小说阅读器**：TXT/EPUB 识别（TXT 编码探测 + 章节索引，EPUB 标准解析）+ 沉浸式阅读页（目录/字号/行距/主题/进度记忆），文件管理点击 txt|epub 直接阅读
 - **初始化向导**：首次访问创建 admin，完成后锁定
 
 ## 目录结构
