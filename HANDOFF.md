@@ -3,7 +3,7 @@
 > 新对话开始工作前，请先读本文件，再读 AGENTS.md 与 docs/ 下的文档。
 
 ## 一句话状态
-**手册全部实施步骤（0.4–8.2）已实现并提交推送**：阶段 0–5 功能全完成，阶段 6 部署配置就绪，阶段 7 测试覆盖（后端 80.8% + 前端 11 冒烟/权限测试）+ 文档，阶段 8 upgrade.sh + 压测基线。最近一轮新增四个家庭 NAS 功能（回收站/修改密码/相册/大屏增强）已完成并提交推送。**正式环境已切换：轻量 Docker 模式（nginx+backend，容器内隔离 admin 账号，只读挂载 /home/wb/nas）正在运行**，演示/开发数据已清理。仍可选做：宿主完整部署（install-helper / dir-permissions / samba-include）、正式压测与 PG 对比。
+**手册全部实施步骤（0.4–8.2）已实现并提交推送**：阶段 0–5 功能全完成，阶段 6 部署配置就绪，阶段 7 测试覆盖（后端 80.8% + 前端 11 冒烟/权限测试）+ 文档，阶段 8 upgrade.sh + 压测基线。最近一轮新增小说阅读器（TXT/EPUB 识别 + 章节阅读 + 进度记忆）与 WebDAV 防火墙修复，并补齐 dav/favorite/notification/share/reader 测试（后端 225 测试 / 前端 23 测试全绿）。**正式环境已切换：轻量 Docker 模式（nginx+backend，容器内隔离 admin 账号，只读挂载 /home/wb/nas）正在运行**，演示/开发数据已清理。仍可选做：宿主完整部署（install-helper / dir-permissions / samba-include）、正式压测与 PG 对比。
 
 ## 项目与目标
 - GuiCang（归藏）家庭 NAS 管理系统。仓库：https://github.com/Isanti2016/GuiCang
@@ -14,7 +14,7 @@
 - 账号：Web 用户 = Linux 系统用户，PAM 认证，sudo 白名单 guicang-helper，后端不跑 root；密码不落库。
 - 提交：一律中文 Conventional Commits。
 
-## 已实现（全部提交推送，后端 110 测试 / 前端 11 测试全绿）
+## 已实现（全部提交推送，后端 225 测试 / 前端 23 测试全绿）
 - 认证/RBAC：PAM（helper/local 双实现）+ JWT（query token 支持媒体标签）、用户/角色/权限 CRUD、目录级 ACL
 - 文件：目录操作、上传≤1G、Range 下载/流、md/txt 编辑、图片/视频缩略图、索引搜索
 - 监控/大屏：30s 指标（2h/24h 序列）、聚合 API、前端 ECharts 大屏（30s 轮询）
@@ -42,6 +42,14 @@
 - 监控录像：接收目录（可配置）→ 每 5 分钟自动归档 cameras/archive/{摄像头}/{日期}/（camera 表自动注册 + 文件名日期解析 + 冲突后缀），Web 端监控录像页按摄像头/日期浏览播放
 - 另：修复磁盘告警阈值设置项未注册问题（disk.alert-threshold 现可在系统设置调整）；新增 docs/手机相册备份接入指南.md 与 docs/移动端App方案.md
 - 另：移除 ELK 日志链路（logback 滚动文件）；自动整理补齐 audio/document 分类
+
+## 本轮新增（2026-08-31，小说阅读器 + 测试补齐，已提交推送）
+- 小说阅读器：TXT/EPUB 识别（TXT 编码探测 BOM/UTF-8/GB18030 + 正则章节；EPUB container→OPF→spine 解析 + Zip Slip 防御），章节阅读 API（/api/v1/reader/novel|chapter|progress），阅读进度按用户+文件持久化（reading_progress 表，V15 迁移）
+- 阅读体验：前端 ReaderView 沉浸式阅读页（/reader?path=），目录侧栏、字号/行距/主题（纸质/羊皮纸/夜间）本地记忆、滚动防抖自动保存进度、章节上下翻
+- 文件管理入口：FileView 点击/双击 txt|epub 直接进阅读器，卡片与表格操作列新增「阅读」按钮
+- 修复生产 bug：Spring Security 6 StrictHttpFirewall 默认拦截 WebDAV 非标准方法（PROPFIND/MKCOL/MOVE 等全部 400）→ 显式 HttpFirewall 白名单 + DavController OPTIONS 显式路由
+- 测试补齐：dav（12）/favorite（6）/notification（7+5）/share（12）模块零测试清零；reader 模块 EncodingDetector（8）/Txt（16）/Epub（11）/API（10）；后端全量 225 测试、前端 23 测试全绿
+- 另：修复 EncodingDetector 64KB 探测头截断误判 GB18030（尾部去 1~3 字节重试）；修复 epub 标题提取顺序 bug
 
 ## 待用户确认执行（下一步，均不触碰 /home/wb/nas 现有数据）
 1. `sudo ./scripts/install-helper.sh`（建组/服务账号/装 helper/sudoers）——可先 --dry-run
