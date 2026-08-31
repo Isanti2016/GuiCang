@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, reactive, ref } from "vue";
+import { useRouter } from "vue-router";
 import {
   ElMessage,
   ElMessageBox,
@@ -41,6 +42,17 @@ import {
   removeFavorite,
   type FavoriteVO,
 } from "@/api/favorite";
+
+const router = useRouter();
+
+/** 是否小说文件（TXT / EPUB），支持读书阅读体验。 */
+const isNovel = (entry: FileEntry): boolean =>
+  !entry.dir && /\.(txt|epub)$/i.test(entry.name);
+
+/** 打开小说阅读器。 */
+function openReader(entry: FileEntry): void {
+  void router.push({ path: "/reader", query: { path: entry.path } });
+}
 
 const md = new MarkdownIt({
   html: false,
@@ -162,10 +174,12 @@ function handleEntryClick(entry: FileEntry): void {
   openEntry(entry);
 }
 
-/** 打开条目：目录进入、可预览文件预览、其余提示。 */
+/** 打开条目：目录进入、小说进入阅读器、可预览文件预览、其余提示。 */
 function openEntry(entry: FileEntry): void {
   if (entry.dir) {
     void navigate(entry.path);
+  } else if (isNovel(entry)) {
+    openReader(entry);
   } else if (canPreview(entry)) {
     void openPreview(entry);
   } else {
@@ -879,6 +893,14 @@ onMounted(() => {
             <div class="file-manager__card-actions">
               <el-button
                 link
+                type="primary"
+                size="small"
+                @click.stop="openReader(entry)"
+                v-if="isNovel(entry)"
+                >阅读</el-button
+              >
+              <el-button
+                link
                 size="small"
                 @click.stop="openPreview(entry)"
                 :disabled="!canPreview(entry)"
@@ -968,8 +990,16 @@ onMounted(() => {
           <el-table-column prop="mtime" label="修改时间" width="170">
             <template #default="{ row }">{{ formatTime(row.mtime) }}</template>
           </el-table-column>
-          <el-table-column label="操作" width="250">
+          <el-table-column label="操作" width="280">
             <template #default="{ row }">
+              <el-button
+                v-if="isNovel(row)"
+                link
+                type="primary"
+                size="small"
+                @click="openReader(row)"
+                >阅读</el-button
+              >
               <el-button
                 link
                 type="primary"

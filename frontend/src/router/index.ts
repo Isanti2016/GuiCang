@@ -103,6 +103,13 @@ const routes: RouteRecordRaw[] = [
       },
     ],
   },
+  {
+    // 小说阅读器：独立全屏页面（不套 MainLayout），沉浸式阅读体验
+    path: "/reader",
+    name: "reader",
+    component: () => import("@/views/ReaderView.vue"),
+    meta: { title: "阅读" },
+  },
   { path: "/:pathMatch(.*)*", redirect: "/dashboard" },
 ];
 
