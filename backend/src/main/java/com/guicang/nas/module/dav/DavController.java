@@ -1,5 +1,6 @@
 package com.guicang.nas.module.dav;
 
+import com.guicang.nas.common.BizException;
 import com.guicang.nas.infra.account.PAMVerifier;
 import com.guicang.nas.infra.account.PAMVerifyResult;
 import com.guicang.nas.infra.storage.FileEntry;
@@ -21,6 +22,7 @@ import java.time.format.DateTimeFormatter;
 import java.util.Base64;
 import java.util.List;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.bind.annotation.RestController;
 
 /** WebDAV 控制器：Basic Auth（PAM）+ 核心方法（PROPFIND/GET/PUT/MKCOL/DELETE/MOVE）。 */
@@ -54,6 +56,16 @@ public class DavController {
     }
   }
 
+  /**
+   * 显式映射 OPTIONS：Spring MVC 对"方法条件为空"的映射会自动生成 HttpOptionsHandler 并短路
+   * （响应体只有默认 Allow 头，没有 DAV 头），导致 WebDAV 客户端无法发现 DAV 支持。
+   * 显式声明 method=OPTIONS 后，请求会路由到本方法而不是自动 handler。
+   */
+  @RequestMapping(value = "/dav/**", method = RequestMethod.OPTIONS)
+  public void handleOptionsRoute(HttpServletResponse response) {
+    handleOptions(response);
+  }
+
   private String authenticate(HttpServletRequest request, HttpServletResponse response)
       throws IOException {
     String auth = request.getHeader("Authorization");
@@ -63,7 +75,7 @@ public class DavController {
       String[] parts = decoded.split(":", 2);
       if (parts.length == 2) {
         PAMVerifyResult r = pamVerifier.verify(parts[0], parts[1]);
-        if (r.ok()) {
+        if (r != null && r.ok()) {
           return parts[0];
         }
       }
@@ -99,8 +111,10 @@ public class DavController {
   private void handlePropfind(String path, HttpServletRequest request, HttpServletResponse response)
       throws IOException {
     String depth = request.getHeader("Depth");
-    Path abs = path.isBlank() ? storageService.root() : storageService.resolveFile(path);
-    if (!Files.exists(abs)) {
+    Path abs;
+    try {
+      abs = path.isBlank() ? storageService.root() : storageService.resolvePath(path);
+    } catch (BizException e) {
       response.sendError(HttpServletResponse.SC_NOT_FOUND);
       return;
     }
@@ -110,7 +124,7 @@ public class DavController {
     appendResource(xml, path, abs);
     if ("1".equals(depth) && Files.isDirectory(abs)) {
       for (FileEntry e : storageService.list(path)) {
-        appendResource(xml, e.path(), storageService.resolveFile(e.path()));
+        appendResource(xml, e.path(), storageService.resolvePath(e.path()));
       }
     }
     xml.append("</D:multistatus>");
@@ -157,8 +171,14 @@ public class DavController {
   }
 
   private void handleGet(String path, HttpServletResponse response) throws IOException {
-    Path abs = storageService.resolveFile(path);
-    if (!Files.exists(abs) || Files.isDirectory(abs)) {
+    Path abs;
+    try {
+      abs = storageService.resolvePath(path);
+    } catch (BizException e) {
+      response.sendError(HttpServletResponse.SC_NOT_FOUND);
+      return;
+    }
+    if (Files.isDirectory(abs)) {
       response.sendError(HttpServletResponse.SC_NOT_FOUND);
       return;
     }
@@ -171,7 +191,7 @@ public class DavController {
   }
 
   private void handlePut(String path, HttpServletRequest request) throws IOException {
-    Path target = storageService.resolveFile(path);
+    Path target = storageService.resolveForWrite(path);
     if (target.getParent() != null) {
       Files.createDirectories(target.getParent());
     }

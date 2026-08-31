@@ -48,6 +48,12 @@ public interface StorageService {
   /** 解析并校验文件相对路径，返回绝对路径（用于下载/预览流式读取）。 */
   Path resolveFile(String relativePath);
 
+  /** 解析并校验相对路径（文件或目录均可，需真实存在），返回绝对路径（用于 WebDAV PROPFIND 等）。 */
+  Path resolvePath(String relativePath);
+
+  /** 解析并校验写目标相对路径（允许目标尚不存在，仅防越界），返回绝对路径（用于 WebDAV PUT 等）。 */
+  Path resolveForWrite(String relativePath);
+
   /** 存储根绝对路径。 */
   Path root();
 }

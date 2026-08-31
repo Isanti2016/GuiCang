@@ -281,6 +281,35 @@ public class StorageServiceImpl implements StorageService {
   }
 
   /**
+   * 解析并校验相对路径（文件或目录均可，需真实存在），返回绝对路径。
+   *
+   * @param relativePath 相对路径
+   * @return 绝对路径
+   */
+  @Override
+  public Path resolvePath(String relativePath) {
+    Path file = PathUtils.resolve(storageRoot, relativePath);
+    PathUtils.checkRealPath(storageRoot, file);
+    if (!Files.exists(file)) {
+      throw new BizException("不存在: " + relativePath);
+    }
+    return file;
+  }
+
+  /**
+   * 解析并校验写目标相对路径（允许目标尚不存在，仅防越界），返回绝对路径。
+   *
+   * @param relativePath 写目标相对路径
+   * @return 绝对路径
+   */
+  @Override
+  public Path resolveForWrite(String relativePath) {
+    Path file = PathUtils.resolve(storageRoot, relativePath);
+    PathUtils.checkRealPath(storageRoot, file);
+    return file;
+  }
+
+  /**
    * 存储根绝对路径。
    *
    * @return 存储根路径

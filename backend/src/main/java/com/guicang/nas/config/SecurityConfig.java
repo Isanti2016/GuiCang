@@ -21,6 +21,8 @@ import org.springframework.security.web.AuthenticationEntryPoint;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.access.AccessDeniedHandler;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.security.web.firewall.HttpFirewall;
+import org.springframework.security.web.firewall.StrictHttpFirewall;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
@@ -77,6 +79,20 @@ public class SecurityConfig {
   public AccessDeniedHandler forbiddenHandler() {
     return (request, response, accessDeniedException) ->
         writeError(response, HttpStatus.FORBIDDEN, ResultCodes.FORBIDDEN, "无权限访问");
+  }
+
+  /**
+   * WebDAV 需要非标准 HTTP 方法（PROPFIND/MKCOL/MOVE 等）。Spring Security 6 默认的
+   * StrictHttpFirewall 只放行标准方法，其余一律 400——必须显式放行 DAV 方法，否则 /dav/** 不可用。
+   */
+  @Bean
+  public HttpFirewall webDavHttpFirewall() {
+    StrictHttpFirewall firewall = new StrictHttpFirewall();
+    firewall.setAllowedHttpMethods(
+        List.of(
+            "GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "TRACE",
+            "PROPFIND", "PROPPATCH", "MKCOL", "MOVE", "COPY", "LOCK", "UNLOCK"));
+    return firewall;
   }
 
   /** 开发期放行跨域（生产由 Nginx 同源控制，仅内网/Tailscale 网段）。 */
