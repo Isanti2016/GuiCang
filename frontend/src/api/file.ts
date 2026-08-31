@@ -188,6 +188,40 @@ export function transcodeStatus(path: string): Promise<TranscodeStatus> {
   return get<TranscodeStatus>("/files/media/transcode/status", { path });
 }
 
+/** 批量转码任务项状态（与后端 BatchItemVO 对应）。 */
+export interface BatchTranscodeItem {
+  path: string;
+  status: "PENDING" | "RUNNING" | "DONE" | "FAILED" | "SKIPPED";
+  progress: number;
+  message: string;
+  outputPath: string;
+}
+
+/** 批量转码批次状态（与后端 BatchStatusVO 对应）。 */
+export interface BatchTranscodeStatus {
+  batchId: string;
+  state: "RUNNING" | "DONE" | "GONE";
+  total: number;
+  running: number;
+  done: number;
+  failed: number;
+  items: BatchTranscodeItem[];
+}
+
+/** 启动批量转码：扫描存储根下浏览器不支持的视频排队转码。 */
+export function startBatchTranscode(): Promise<BatchTranscodeStatus> {
+  return post<BatchTranscodeStatus>("/files/media/transcode/batch");
+}
+
+/** 查询批量转码批次状态。 */
+export function batchTranscodeStatus(
+  batchId: string,
+): Promise<BatchTranscodeStatus> {
+  return get<BatchTranscodeStatus>("/files/media/transcode/batch/status", {
+    batchId,
+  });
+}
+
 /** 带 token 的缩略图 URL。 */
 export function thumbnailUrl(path: string): string {
   return `/api/v1/files/thumbnail?path=${encodeURIComponent(path)}&token=${getToken() ?? ""}`;

@@ -4,6 +4,7 @@ import com.guicang.nas.common.Result;
 import com.guicang.nas.infra.storage.FileEntry;
 import com.guicang.nas.module.file.dto.MediaMetadataVO;
 import com.guicang.nas.module.file.dto.TranscodeStatusVO;
+import com.guicang.nas.module.file.dto.BatchStatusVO;
 import com.guicang.nas.module.file.dto.DuplicateGroup;
 import com.guicang.nas.module.file.dto.FileBatchDeleteRequest;
 import com.guicang.nas.module.file.dto.ChunkStatus;
@@ -103,6 +104,28 @@ public class FileController {
   public Result<TranscodeStatusVO> mediaTranscodeStatus(
       @RequestParam @NotBlank String path) {
     return Result.ok(fileService.transcodeStatus(path));
+  }
+
+  /**
+   * 批量转码：扫描存储根下浏览器不支持的视频排队转码（需根目录 WRITE 权限）。
+   *
+   * @return 批次状态（batchId 空表示无任务）
+   */
+  @PostMapping("/media/transcode/batch")
+  public Result<BatchStatusVO> mediaTranscodeBatch() {
+    return Result.ok(fileService.startBatchTranscode());
+  }
+
+  /**
+   * 查询批量转码批次状态。
+   *
+   * @param batchId 批次 ID
+   * @return 批次状态
+   */
+  @GetMapping("/media/transcode/batch/status")
+  public Result<BatchStatusVO> mediaTranscodeBatchStatus(
+      @RequestParam @NotBlank String batchId) {
+    return Result.ok(fileService.batchTranscodeStatus(batchId));
   }
 
   /**

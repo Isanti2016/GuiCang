@@ -3,6 +3,7 @@ package com.guicang.nas.module.file;
 import com.guicang.nas.infra.storage.FileEntry;
 import com.guicang.nas.module.file.dto.MediaMetadataVO;
 import com.guicang.nas.module.file.dto.TranscodeStatusVO;
+import com.guicang.nas.module.file.dto.BatchStatusVO;
 import com.guicang.nas.module.file.dto.ChunkStatus;
 import com.guicang.nas.module.file.dto.DuplicateGroup;
 import com.guicang.nas.module.file.dto.FileStreamInfo;
@@ -99,4 +100,10 @@ public interface FileService {
 
   /** 查询转码状态（IDLE/RUNNING/DONE/FAILED + 进度）。 */
   TranscodeStatusVO transcodeStatus(String path);
+
+  /** 批量转码：扫描存储根下浏览器不支持的视频排队转码（需根目录 WRITE 权限）。 */
+  BatchStatusVO startBatchTranscode();
+
+  /** 查询批量转码批次状态。 */
+  BatchStatusVO batchTranscodeStatus(String batchId);
 }

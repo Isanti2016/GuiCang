@@ -11,7 +11,9 @@ import {
   streamUrl,
   thumbnailUrl,
   transcodeStatus,
-  type FileEntry,
+  type FileEntry,  batchTranscodeStatus,
+  startBatchTranscode,
+  type BatchTranscodeStatus,
   type MediaMetadata,
   type TranscodeStatus,
 } from "@/api/file";
@@ -158,6 +160,19 @@ const activePlayPath = ref<string | null>(null);
 /** 是否正在转码（按钮 loading + 进度条）。 */
 const transcoding = computed(() => transcodeJob.value?.status === "RUNNING");
 
+/** 批量转码任务状态（null=未启动）。 */
+const batchJob = ref<BatchTranscodeStatus | null>(null);
+/** 批量转码弹窗开关。 */
+const batchDialogOpen = ref(false);
+/** 批量转码轮询定时器。 */
+let batchTimer: number | null = null;
+/** 扫描中（点按钮后、拿到批次前）。 */
+const batchScanning = ref(false);
+/** 批量任务是否进行中（弹窗显示进度 + 按钮 loading）。 */
+const batchRunning = computed(
+  () => batchJob.value?.state === "RUNNING" || batchScanning.value,
+);
+
 function cycleVideoRate(): void {
   const i = VIDEO_RATES.indexOf(videoRate.value);
   videoRate.value = VIDEO_RATES[(i + 1) % VIDEO_RATES.length];
@@ -202,7 +217,74 @@ function stopTranscodePolling(): void {
   }
 }
 
-/** 启动「转码兼容版」：调用后端 ffmpeg 任务并轮询进度。 */
+/** 路径取文件名（展示用）。 */
+function baseName(p: string): string {
+  return p.slice(p.lastIndexOf("/") + 1);
+}
+
+/** 状态标签文案。 */
+function batchStatusText(s: string): string {
+  switch (s) {
+    case "PENDING":
+      return "排队中";
+    case "RUNNING":
+      return "转码中";
+    case "DONE":
+      return "已完成";
+    case "FAILED":
+      return "失败";
+    case "SKIPPED":
+      return "已跳过";
+    default:
+      return s;
+  }
+}
+
+/** 停止批量轮询。 */
+function stopBatchPolling(): void {
+  if (batchTimer) {
+    window.clearInterval(batchTimer);
+    batchTimer = null;
+  }
+}
+
+/** 启动批量转码：后端扫描全库不兼容视频排队转码，弹窗展示进度。 */
+async function startBatch(): Promise<void> {
+  batchScanning.value = true;
+  try {
+    const job = await startBatchTranscode();
+    batchJob.value = job;
+    batchScanning.value = false;
+    if (!job.batchId) {
+      ElMessage.success("没有发现浏览器不支持的视频，无需转码");
+      return;
+    }
+    batchDialogOpen.value = true;
+    if (job.state === "RUNNING") {
+      batchTimer = window.setInterval(async () => {
+        try {
+          const s = await batchTranscodeStatus(job.batchId);
+          batchJob.value = s;
+          if (s.state === "DONE" || s.state === "GONE") {
+            stopBatchPolling();
+          }
+        } catch {
+          stopBatchPolling();
+          ElMessage.error("批量转码状态查询失败");
+        }
+      }, 2000);
+    }
+  } catch {
+    batchScanning.value = false;
+    /* http 层已提示 */
+  }
+}
+
+/** 关闭批量弹窗：停止轮询（任务在后台继续）。 */
+function closeBatchDialog(): void {
+  stopBatchPolling();
+  batchDialogOpen.value = false;
+}/** 启动「转码兼容版」：调用后端 ffmpeg 任务并轮询进度。 */
 async function startCompatTranscode(): Promise<void> {
   const c = current.value;
   if (!c || c.kind !== "video") return;
@@ -375,6 +457,13 @@ onBeforeUnmount(() => {
               @click="toggleSelectionMode"
             >
               {{ selectionMode ? "取消选择" : "选择" }}
+            </el-button>
+            <el-button
+              plain
+              :loading="batchRunning"
+              @click="startBatch"
+            >
+              批量转码
             </el-button>
           </div>
         </div>
@@ -572,6 +661,57 @@ onBeforeUnmount(() => {
         <div class="gallery__lightbox-footer">
           <span>{{ lightboxIndex + 1 }} / {{ lightboxList.length }}</span>
         </div>
+      </template>
+    </el-dialog>
+
+    <el-dialog
+      v-model="batchDialogOpen"
+      title="批量转码"
+      width="560px"
+      :close-on-click-modal="false"
+      @closed="closeBatchDialog"
+    >
+      <template #header>
+        <span>批量转码兼容版</span>
+        <span style="margin-left: 12px; font-size: 12px; color: #909399">
+          共 {{ batchJob?.total ?? 0 }} 项 · 完成 {{ batchJob?.done ?? 0 }} · 失败
+          {{ batchJob?.failed ?? 0 }}
+        </span>
+      </template>
+      <div
+        v-if="batchJob"
+        style="max-height: 46vh; overflow-y: auto; display: flex; flex-direction: column; gap: 10px"
+      >
+        <div
+          v-for="(it, idx) in batchJob.items"
+          :key="it.path"
+          style="border: 1px solid #ebeef5; border-radius: 8px; padding: 10px 12px"
+        >
+          <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px">
+            <span style="font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; margin-right: 8px">
+              {{ idx + 1 }}. {{ baseName(it.path) }}
+            </span>
+            <el-tag
+              size="small"
+              :type="
+                it.status === 'DONE' ? 'success' : it.status === 'FAILED' ? 'danger' : it.status === 'RUNNING' ? 'primary' : 'info'
+              "
+            >
+              {{ batchStatusText(it.status) }}
+            </el-tag>
+          </div>
+          <el-progress
+            :percentage="it.progress"
+            :status="it.status === 'DONE' ? 'success' : it.status === 'FAILED' ? 'exception' : undefined"
+            :stroke-width="8"
+          />
+          <div v-if="it.message" style="margin-top: 4px; font-size: 12px; color: #f56c6c">
+            {{ it.message }}
+          </div>
+        </div>
+      </div>
+      <template #footer>
+        <el-button @click="closeBatchDialog">后台继续，关闭</el-button>
       </template>
     </el-dialog>
   </div>

@@ -15,6 +15,7 @@ import com.guicang.nas.module.file.dto.DuplicateGroup;
 import com.guicang.nas.module.file.dto.FileStreamInfo;
 import com.guicang.nas.module.file.dto.MediaMetadataVO;
 import com.guicang.nas.module.file.dto.TranscodeStatusVO;
+import com.guicang.nas.module.file.dto.BatchStatusVO;
 import com.guicang.nas.module.user.SysUser;
 import com.guicang.nas.module.user.UserService;
 import java.io.IOException;
@@ -57,6 +58,7 @@ public class FileServiceImpl implements FileService {
   private final MediaInspectService mediaInspectService;
   private final FileIndexMapper fileIndexMapper;
   private final MediaTranscodeService mediaTranscodeService;
+  private final MediaBatchTranscodeService mediaBatchTranscodeService;
 
   @Value("${guicang.file.max-upload-size-bytes:1073741824}")
   private long maxUploadSizeBytes;
@@ -80,7 +82,8 @@ public class FileServiceImpl implements FileService {
       UserService userService,
       MediaInspectService mediaInspectService,
       FileIndexMapper fileIndexMapper,
-      MediaTranscodeService mediaTranscodeService) {
+      MediaTranscodeService mediaTranscodeService,
+      MediaBatchTranscodeService mediaBatchTranscodeService) {
     this.storageService = storageService;
     this.dirPermissionService = dirPermissionService;
     this.thumbnailService = thumbnailService;
@@ -91,6 +94,7 @@ public class FileServiceImpl implements FileService {
     this.mediaInspectService = mediaInspectService;
     this.fileIndexMapper = fileIndexMapper;
     this.mediaTranscodeService = mediaTranscodeService;
+    this.mediaBatchTranscodeService = mediaBatchTranscodeService;
   }
 
   /**
@@ -431,6 +435,31 @@ public class FileServiceImpl implements FileService {
     AuthenticatedUser user = requireUser();
     dirPermissionService.check(user.username(), authorities(), path, DirPerm.READ);
     return mediaTranscodeService.status(path);
+  }
+
+  /**
+   * 批量转码：扫描存储根下所有视频，浏览器不支持的排队转码（需根目录 WRITE 权限）。
+   *
+   * @return 批次状态（batchId 空表示无任务）
+   */
+  @Override
+  public BatchStatusVO startBatchTranscode() {
+    AuthenticatedUser user = requireUser();
+    dirPermissionService.check(user.username(), authorities(), "", DirPerm.WRITE);
+    return mediaBatchTranscodeService.startAll();
+  }
+
+  /**
+   * 查询批量转码批次状态。
+   *
+   * @param batchId 批次 ID
+   * @return 批次状态
+   */
+  @Override
+  public BatchStatusVO batchTranscodeStatus(String batchId) {
+    AuthenticatedUser user = requireUser();
+    dirPermissionService.check(user.username(), authorities(), "", DirPerm.READ);
+    return mediaBatchTranscodeService.status(batchId);
   }
 
   /**
