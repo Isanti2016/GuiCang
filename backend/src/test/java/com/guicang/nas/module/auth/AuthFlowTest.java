@@ -137,4 +137,60 @@ class AuthFlowTest {
         .andExpect(status().isBadRequest())
         .andExpect(jsonPath("$.code").value(ResultCodes.BAD_REQUEST));
   }
+
+  @Test
+  void TOTP恢复码可登录且一次性消费() throws Exception {
+    when(pamVerifier.verify("alice", "secret-pass"))
+        .thenReturn(PAMVerifyResult.success(1005, 2000, "/home/alice", "/usr/sbin/nologin"));
+
+    // 1. 登录拿令牌
+    String loginBody =
+        mockMvc
+            .perform(
+                post("/api/v1/auth/login")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("{\"username\":\"alice\",\"password\":\"secret-pass\"}"))
+            .andReturn()
+            .getResponse()
+            .getContentAsString();
+    String token = objectMapper.readTree(loginBody).path("data").path("token").asText();
+
+    // 2. 开启两步验证，返回 10 个恢复码
+    String enableBody =
+        mockMvc
+            .perform(post("/api/v1/auth/totp/enable").header("Authorization", "Bearer " + token))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.secret").isNotEmpty())
+            .andExpect(jsonPath("$.data.recoveryCodes.length()").value(10))
+            .andReturn()
+            .getResponse()
+            .getContentAsString();
+    String recoveryCode =
+        objectMapper.readTree(enableBody).path("data").path("recoveryCodes").get(0).asText();
+
+    // 3. 用恢复码登录成功（TOTP 已开启，动态码/恢复码任一通过）
+    mockMvc
+        .perform(
+            post("/api/v1/auth/login")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(
+                    "{\"username\":\"alice\",\"password\":\"secret-pass\",\"totp\":\""
+                        + recoveryCode
+                        + "\"}"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.code").value(ResultCodes.SUCCESS));
+
+    // 4. 同一恢复码二次使用被拒绝（一次性消费）
+    mockMvc
+        .perform(
+            post("/api/v1/auth/login")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(
+                    "{\"username\":\"alice\",\"password\":\"secret-pass\",\"totp\":\""
+                        + recoveryCode
+                        + "\"}"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.code").value(ResultCodes.UNAUTHORIZED))
+        .andExpect(jsonPath("$.message").value("两步验证码错误"));
+  }
 }

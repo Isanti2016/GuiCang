@@ -15,6 +15,7 @@ import com.guicang.nas.module.auth.dto.LoginRequest;
 import com.guicang.nas.module.auth.dto.LoginResponse;
 import com.guicang.nas.module.auth.dto.TotpEnableResult;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.guicang.nas.common.TotpUtil;
 import com.guicang.nas.module.user.SysUser;
 import com.guicang.nas.module.user.SysUserMapper;
@@ -148,8 +149,12 @@ public class AuthServiceImpl implements AuthService {
   public void disableTotp() {
     AuthenticatedUser user = requireUser();
     SysUser sysUser = requireSysUser(user.username());
-    sysUser.setTotpSecret(null);
-    sysUserMapper.updateById(sysUser);
+    // 显式置空：MyBatis-Plus updateById 默认忽略 null 字段，直接 updateById 无法清掉密钥
+    sysUserMapper.update(
+        null,
+        new LambdaUpdateWrapper<SysUser>()
+            .eq(SysUser::getId, sysUser.getId())
+            .set(SysUser::getTotpSecret, null));
     recoveryCodeMapper.delete(
         new LambdaQueryWrapper<RecoveryCode>().eq(RecoveryCode::getUserId, sysUser.getId()));
   }
