@@ -18,6 +18,8 @@ import {
   type SyncTask,
   type SyncTaskPayload,
 } from "@/api/sync";
+import { listFiles } from "@/api/file";
+import { FolderOpened } from "@element-plus/icons-vue";
 
 const tasks = ref<SyncTask[]>([]);
 const loading = ref(false);
@@ -35,6 +37,43 @@ const form = reactive({
   conflict: "rename",
   cron: "0 0 3 * * ?",
 });
+
+// ============ 目录点选器 ============
+const dirPickerOpen = ref(false);
+const dirPickerTarget = ref<"sourceConfig" | "targetConfig">("sourceConfig");
+const dirPickerKey = ref(0);
+
+function openDirPicker(target: "sourceConfig" | "targetConfig"): void {
+  dirPickerTarget.value = target;
+  dirPickerKey.value += 1; // 强制重建树，重新加载根节点
+  dirPickerOpen.value = true;
+}
+
+async function loadDirNode(
+  node: { level: number; data?: { path?: string } },
+  resolve: (data: { name: string; path: string; leaf: boolean }[]) => void,
+): Promise<void> {
+  const parentPath = node.level === 0 ? "" : (node.data?.path ?? "");
+  try {
+    const files = await listFiles(parentPath);
+    resolve(
+      files
+        .filter((f) => f.dir)
+        .map((f) => ({ name: f.name, path: f.path, leaf: false })),
+    );
+  } catch {
+    resolve([]);
+  }
+}
+
+function pickDir(data: { path: string }): void {
+  if (dirPickerTarget.value === "sourceConfig") {
+    form.sourceConfig = data.path;
+  } else {
+    form.targetConfig = data.path;
+  }
+  dirPickerOpen.value = false;
+}
 
 const rules: FormRules = {
   name: [{ required: true, message: "请输入任务名", trigger: "blur" }],
@@ -482,13 +521,21 @@ onMounted(() => {
             <el-input
               v-model="form.sourceConfig"
               placeholder="收件箱目录，如 media/photos/inbox"
-            />
+            >
+              <template #append>
+                <el-button :icon="FolderOpened" @click="openDirPicker('sourceConfig')">选择</el-button>
+              </template>
+            </el-input>
           </el-form-item>
           <el-form-item label="目标目录" prop="targetConfig">
             <el-input
               v-model="form.targetConfig"
               placeholder="归档根目录，如 media/photos"
-            />
+            >
+              <template #append>
+                <el-button :icon="FolderOpened" @click="openDirPicker('targetConfig')">选择</el-button>
+              </template>
+            </el-input>
           </el-form-item>
           <el-form-item label="整理规则" prop="ruleType">
             <el-select v-model="form.ruleType" style="width: 100%">
@@ -522,7 +569,11 @@ onMounted(() => {
           <el-input
             v-model="form.sourceConfig"
             placeholder="存储根下相对路径，如 media/photos；空表示全根"
-          />
+          >
+            <template #append>
+              <el-button :icon="FolderOpened" @click="openDirPicker('sourceConfig')">选择</el-button>
+            </template>
+          </el-input>
         </el-form-item>
         <el-form-item label="Cron" prop="cron">
           <el-input
@@ -623,6 +674,28 @@ onMounted(() => {
         :image-size="60"
       />
     </el-dialog>
+
+    <!-- 目录选择 -->
+    <el-dialog
+      v-model="dirPickerOpen"
+      :title="dirPickerTarget === 'sourceConfig' ? '选择源目录' : '选择目标目录'"
+      width="420px"
+      append-to-body
+    >
+      <el-tree
+        :key="dirPickerKey"
+        :props="{ label: 'name', isLeaf: 'leaf' }"
+        node-key="path"
+        lazy
+        :load="loadDirNode"
+        highlight-current
+        class="sync-view__dir-tree"
+        @node-click="pickDir"
+      />
+      <template #footer>
+        <el-button @click="dirPickerOpen = false">取消</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -632,6 +705,12 @@ onMounted(() => {
   flex-direction: column;
   gap: 12px;
   font-family: var(--gc-font-sans, inherit);
+}
+
+.sync-view__dir-tree {
+  max-height: 55vh;
+  overflow: auto;
+  background: transparent;
 }
 
 .sync-view__header {

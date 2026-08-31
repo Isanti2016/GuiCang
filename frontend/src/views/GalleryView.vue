@@ -1,9 +1,11 @@
 <script setup lang="ts">
 import { ElMessage, ElMessageBox } from "element-plus";
 import { computed, onBeforeUnmount, onMounted, ref } from "vue";
+import { Download } from "@element-plus/icons-vue";
 import {
   batchDelete,
   fetchMedia,
+  downloadFileAsBlob,
   streamUrl,
   thumbnailUrl,
   type FileEntry,
@@ -134,9 +136,60 @@ function next(): void {
   lightboxIndex.value = (lightboxIndex.value + 1) % lightboxList.value.length;
 }
 
-/** 灯箱键盘导航（←/→/ESC）。 */
+const videoEl = ref<HTMLVideoElement | null>(null);
+const videoRate = ref(1);
+const VIDEO_RATES = [0.5, 1, 1.5, 2];
+
+function cycleVideoRate(): void {
+  const i = VIDEO_RATES.indexOf(videoRate.value);
+  videoRate.value = VIDEO_RATES[(i + 1) % VIDEO_RATES.length];
+  if (videoEl.value) videoEl.value.playbackRate = videoRate.value;
+}
+
+function seekVideo(ds: number): void {
+  if (!videoEl.value) return;
+  videoEl.value.currentTime = Math.max(0, videoEl.value.currentTime + ds);
+}
+
+function toggleVideoPlay(): void {
+  if (!videoEl.value) return;
+  if (videoEl.value.paused) void videoEl.value.play();
+  else videoEl.value.pause();
+}
+
+function onVideoError(): void {
+  ElMessage.warning("该视频编码浏览器可能不支持，可点击「下载」后用本地播放器观看");
+}
+
+async function downloadCurrent(): Promise<void> {
+  if (!current.value) return;
+  try {
+    await downloadFileAsBlob(current.value.path);
+  } catch {
+    ElMessage.error("下载失败");
+  }
+}
+
+/** 灯箱键盘导航：视频态 ←/→ 快进快退、空格播放暂停；图片态翻页。 */
 function onKeydown(e: KeyboardEvent): void {
   if (!lightboxOpen.value) return;
+  if (current.value?.kind === "video") {
+    if (e.key === "ArrowLeft") {
+      e.preventDefault();
+      seekVideo(-5);
+      return;
+    }
+    if (e.key === "ArrowRight") {
+      e.preventDefault();
+      seekVideo(5);
+      return;
+    }
+    if (e.key === " ") {
+      e.preventDefault();
+      toggleVideoPlay();
+      return;
+    }
+  }
   if (e.key === "ArrowLeft") prev();
   else if (e.key === "ArrowRight") next();
   else if (e.key === "Escape") lightboxOpen.value = false;
@@ -320,8 +373,25 @@ onBeforeUnmount(() => {
           :src="current ? streamUrl(current.path) : ''"
           controls
           autoplay
+          ref="videoEl"
+          @error="onVideoError"
           class="gallery__lightbox-media"
         />
+        <div v-if="current?.kind === 'video'" class="gallery__video-tools">
+          <el-button size="small" @click="seekVideo(-10)">-10s</el-button>
+          <el-button size="small" @click="seekVideo(-5)">-5s</el-button>
+          <el-button size="small" @click="cycleVideoRate">{{ videoRate }}x</el-button>
+          <el-button size="small" @click="seekVideo(5)">+5s</el-button>
+          <el-button size="small" @click="seekVideo(10)">+10s</el-button>
+          <el-button
+            size="small"
+            type="primary"
+            :icon="Download"
+            @click="downloadCurrent"
+          >
+            下载
+          </el-button>
+        </div>
         <button
           class="gallery__nav gallery__nav--next"
           aria-label="下一张"
@@ -462,7 +532,7 @@ onBeforeUnmount(() => {
   margin-bottom: 14px;
   border-radius: 10px;
   overflow: hidden;
-  cursor: zoom-in;
+  cursor: pointer;
   border: 1px solid rgba(126, 210, 255, 0.16);
   background: rgba(10, 30, 60, 0.5);
   transition:
@@ -543,6 +613,22 @@ onBeforeUnmount(() => {
   max-height: 68vh;
   border-radius: 8px;
   box-shadow: 0 14px 50px rgba(2, 10, 26, 0.7);
+}
+
+.gallery__video-tools {
+  position: absolute;
+  bottom: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  z-index: 5;
+  background: rgba(4, 14, 32, 0.72);
+  border: 1px solid rgba(126, 210, 255, 0.22);
+  border-radius: 10px;
+  padding: 4px 8px;
+  backdrop-filter: blur(6px);
 }
 
 .gallery__nav {

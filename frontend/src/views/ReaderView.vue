@@ -2,7 +2,7 @@
 import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { ElMessage } from "element-plus";
-import { ArrowLeft, ArrowRight, List, Setting } from "@element-plus/icons-vue";
+import { ArrowLeft, ArrowRight, List, Microphone, Setting } from "@element-plus/icons-vue";
 import {
   fetchChapter,
   fetchProgress,
@@ -59,6 +59,7 @@ const totalChapters = computed(() => novel.value?.chapterCount ?? 0);
 // ============ 章节加载 ============
 async function loadChapter(index: number): Promise<void> {
   if (!path.value) return;
+  if (speaking.value && !ttsAuto) stopTts();
   chapterLoading.value = true;
   try {
     const data = await fetchChapter(path.value, index);
@@ -127,6 +128,134 @@ function scheduleSave(): void {
   }, 800);
 }
 
+// ============ 朗读（TTS） ============
+const speaking = ref(false);
+const ttsPaused = ref(false);
+const ttsRate = ref(1);
+const ttsProgress = ref(0);
+let ttsTimer: number | null = null;
+let ttsCancel = false;
+let ttsAuto = false;
+let ttsParagraphs: string[] = [];
+let ttsCursor = 0;
+let zhVoice: SpeechSynthesisVoice | null = null;
+
+function pickZhVoice(): SpeechSynthesisVoice | null {
+  const voices = window.speechSynthesis.getVoices();
+  return (
+    voices.find((v) => v.lang.toLowerCase().startsWith("zh-cn") && v.localService) ||
+    voices.find((v) => v.lang.toLowerCase().startsWith("zh")) ||
+    null
+  );
+}
+
+function stopTts(): void {
+  ttsCancel = true;
+  ttsAuto = false;
+  if (ttsTimer !== null) {
+    window.clearTimeout(ttsTimer);
+    ttsTimer = null;
+  }
+  window.speechSynthesis.cancel();
+  speaking.value = false;
+  ttsPaused.value = false;
+  ttsProgress.value = 0;
+}
+
+function speakParagraph(index: number): void {
+  if (ttsCancel) return;
+  if (index >= ttsParagraphs.length) {
+    // 本章读完：自动连播下一章
+    if (ttsAuto && chapter.value && chapter.value.index < totalChapters.value - 1) {
+      const next = chapter.value.index + 1;
+      void loadChapter(next).then(() => {
+        if (!ttsCancel && speaking.value) {
+          ttsCursor = 0;
+          speakCurrentChapter();
+        }
+      });
+    } else {
+      stopTts();
+    }
+    return;
+  }
+  const text = (ttsParagraphs[index] || "").trim();
+  ttsProgress.value = Math.round(((index + 1) / ttsParagraphs.length) * 100);
+  if (!text) {
+    ttsCursor = index + 1;
+    ttsTimer = window.setTimeout(() => {
+      ttsTimer = null;
+      speakParagraph(index + 1);
+    }, 120);
+    return;
+  }
+  const u = new SpeechSynthesisUtterance(text);
+  u.lang = "zh-CN";
+  u.rate = ttsRate.value;
+  if (zhVoice) u.voice = zhVoice;
+  u.onend = () => {
+    if (ttsCancel) return;
+    ttsCursor = index + 1;
+    ttsTimer = window.setTimeout(() => {
+      ttsTimer = null;
+      speakParagraph(index + 1);
+    }, 400);
+  };
+  u.onerror = () => {
+    if (ttsCancel) return;
+    ttsCursor = index + 1;
+    ttsTimer = window.setTimeout(() => {
+      ttsTimer = null;
+      speakParagraph(index + 1);
+    }, 150);
+  };
+  window.speechSynthesis.speak(u);
+}
+
+function speakCurrentChapter(): void {
+  if (!chapter.value) return;
+  const raw = chapter.value.content || "";
+  ttsParagraphs = raw
+    .split(/\n+/)
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0);
+  if (ttsParagraphs.length === 0) {
+    ElMessage.warning("本章没有可朗读的文本");
+    return;
+  }
+  ttsCancel = false;
+  ttsCursor = 0;
+  zhVoice = pickZhVoice();
+  speaking.value = true;
+  ttsPaused.value = false;
+  speakParagraph(0);
+}
+
+function toggleTts(): void {
+  if (ttsPaused.value) {
+    window.speechSynthesis.resume();
+    ttsPaused.value = false;
+    return;
+  }
+  if (speaking.value) {
+    window.speechSynthesis.pause();
+    ttsPaused.value = true;
+    return;
+  }
+  ttsAuto = true;
+  speakCurrentChapter();
+}
+
+function changeTtsRate(delta: number): void {
+  const next = Math.max(0.5, Math.min(2, Math.round((ttsRate.value + delta) * 4) / 4));
+  ttsRate.value = next;
+  if (speaking.value && !ttsPaused.value && ttsCursor < ttsParagraphs.length) {
+    // 重读当前段以应用新语速
+    window.speechSynthesis.cancel();
+    speakParagraph(ttsCursor);
+  }
+}
+
 // ============ 设置 ============
 function changeFontSize(delta: number): void {
   const next = Math.max(14, Math.min(32, settings.value.fontSize + delta));
@@ -190,6 +319,7 @@ onBeforeUnmount(() => {
   if (saveTimer.value !== null) {
     window.clearTimeout(saveTimer.value);
   }
+  stopTts();
   void persistProgress();
 });
 </script>
@@ -222,6 +352,14 @@ onBeforeUnmount(() => {
           @click="settingsOpen = !settingsOpen"
         >
           设置
+        </el-button>
+        <el-button
+          text
+          :icon="Microphone"
+          :type="speaking ? 'primary' : ''"
+          @click="toggleTts"
+        >
+          {{ speaking ? (ttsPaused ? "继续" : "暂停") : "朗读" }}
         </el-button>
       </div>
     </header>
@@ -316,6 +454,26 @@ onBeforeUnmount(() => {
         </div>
         <el-empty v-else-if="!loading" description="暂无内容" />
       </main>
+
+      <!-- 朗读控制条 -->
+      <div v-if="speaking" class="reader__tts">
+        <span class="reader__tts-label">
+          {{ ttsPaused ? "朗读已暂停" : "朗读中" }}
+        </span>
+        <el-button size="small" :icon="Microphone" @click="toggleTts">
+          {{ ttsPaused ? "继续" : "暂停" }}
+        </el-button>
+        <el-button size="small" @click="stopTts">停止</el-button>
+        <el-button size="small" @click="changeTtsRate(-0.25)">语速-</el-button>
+        <span class="reader__tts-rate">{{ ttsRate.toFixed(2) }}x</span>
+        <el-button size="small" @click="changeTtsRate(0.25)">语速+</el-button>
+        <el-progress
+          :percentage="ttsProgress"
+          :stroke-width="4"
+          :show-text="false"
+          style="flex: 1; margin: 0 12px"
+        />
+      </div>
     </div>
   </div>
 </template>
@@ -504,5 +662,36 @@ onBeforeUnmount(() => {
   margin-top: 48px;
   padding-top: 20px;
   border-top: 1px dashed rgba(128, 128, 128, 0.3);
+}
+
+.reader__tts {
+  position: fixed;
+  bottom: 18px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border-radius: 12px;
+  border: 1px solid rgba(126, 210, 255, 0.25);
+  background: rgba(8, 26, 54, 0.94);
+  backdrop-filter: blur(8px);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+  color: #e6f4ff;
+}
+
+.reader__tts-label {
+  font-size: 12px;
+  opacity: 0.75;
+  margin-right: 4px;
+}
+
+.reader__tts-rate {
+  font-size: 13px;
+  font-weight: 600;
+  min-width: 40px;
+  text-align: center;
 }
 </style>

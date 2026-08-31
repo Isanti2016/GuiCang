@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ElMessage, ElMessageBox } from "element-plus";
 import { computed, onMounted, ref } from "vue";
+import { Download } from "@element-plus/icons-vue";
 import {
   deleteCamera,
   fetchCameraMeta,
@@ -11,6 +12,8 @@ import {
   type CameraMeta,
   type CameraRecord,
 } from "@/api/camera";
+import { downloadFileAsBlob } from "@/api/file";
+import { useAuthStore } from "@/stores/auth";
 
 const cameras = ref<Camera[]>([]);
 const meta = ref<CameraMeta | null>(null);
@@ -158,7 +161,37 @@ function play(record: CameraRecord): void {
 }
 
 function streamUrl(record: CameraRecord): string {
-  return `/api/v1/files/stream?path=${encodeURIComponent(record.path)}`;
+  // 通过 query 参数携带 JWT 给 <video> 标签，避开 video 标签不能设 Authorization 头的限制
+  const token = useAuthStore().token || "";
+  return `/api/v1/files/stream?path=${encodeURIComponent(record.path)}&token=${encodeURIComponent(token)}`;
+}
+
+const videoEl = ref<HTMLVideoElement | null>(null);
+const videoRate = ref(1);
+const VIDEO_RATES = [0.5, 1, 1.5, 2];
+
+function cycleVideoRate(): void {
+  const i = VIDEO_RATES.indexOf(videoRate.value);
+  videoRate.value = VIDEO_RATES[(i + 1) % VIDEO_RATES.length];
+  if (videoEl.value) videoEl.value.playbackRate = videoRate.value;
+}
+
+function seekVideo(ds: number): void {
+  if (!videoEl.value) return;
+  videoEl.value.currentTime = Math.max(0, videoEl.value.currentTime + ds);
+}
+
+function onVideoError(): void {
+  ElMessage.warning("该视频编码浏览器可能不支持，可点击「下载」后用本地播放器观看");
+}
+
+async function downloadPlaying(): Promise<void> {
+  if (!playing.value) return;
+  try {
+    await downloadFileAsBlob(playing.value.path);
+  } catch {
+    ElMessage.error("下载失败");
+  }
 }
 
 onMounted(async () => {
@@ -336,8 +369,25 @@ onMounted(async () => {
         :src="streamUrl(playing)"
         controls
         autoplay
+        ref="videoEl"
+        @error="onVideoError"
         class="cameras__video"
       />
+      <div v-if="playing" class="cameras__video-tools">
+        <el-button size="small" @click="seekVideo(-10)">-10s</el-button>
+        <el-button size="small" @click="seekVideo(-5)">-5s</el-button>
+        <el-button size="small" @click="cycleVideoRate">{{ videoRate }}x</el-button>
+        <el-button size="small" @click="seekVideo(5)">+5s</el-button>
+        <el-button size="small" @click="seekVideo(10)">+10s</el-button>
+        <el-button
+          size="small"
+          type="primary"
+          :icon="Download"
+          @click="downloadPlaying"
+        >
+          下载
+        </el-button>
+      </div>
     </el-dialog>
   </div>
 </template>
@@ -346,6 +396,15 @@ onMounted(async () => {
 .cameras {
   position: relative;
   z-index: 1;
+}
+
+.cameras__video-tools {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin-top: 10px;
+  flex-wrap: wrap;
 }
 
 .cameras__card {
