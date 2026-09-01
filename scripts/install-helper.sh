@@ -20,7 +20,7 @@ DRY_RUN=0
 
 NASUSERS_GID=2000
 NASOPS_GID=2001
-SVC_UID=1002
+SVC_UID=1003  # 1002 已被系统账号 admin 占用（归藏初始化向导创建）
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 HELPER_SRC="$SCRIPT_DIR/guicang-helper"
 PAM_SRC="$SCRIPT_DIR/guicang-pam-verify.py"
