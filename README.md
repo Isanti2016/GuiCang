@@ -62,7 +62,16 @@ cd frontend && pnpm test            # 11 个前端测试（Vitest）
 
 ## 部署
 
-### 方式一：Docker 一键启动（推荐，轻量）
+### 当前生产环境（wb 服务器，2026-09-01 起，宿主 systemd 部署）
+
+- **Web 入口：** `http://192.168.31.12:8090/`（Tailscale 外网：`http://100.112.98.102:8090/`；80 端口保留给 Nextcloud）
+- **WebDAV：** `http://192.168.31.12:8090/dav/`（账号=系统账号+密码，第三方客户端可挂载）
+- **Samba 共享：** `nas-shared` / `nas-media` / `personal-<user>`（组 nasusers）
+- 后端：systemd 服务 `guicang-backend`（guicang-svc 非 root 身份、helper 认证、Restart=always）；`systemctl status|restart guicang-backend`，日志 `journalctl -u guicang-backend`
+- 前端/反代：Nginx 监听 8090（配置 `/etc/nginx/conf.d/guicang.conf`）；前端构建产物 `frontend/dist`
+- 改后端代码后：`cd backend && mvn package -DskipTests && systemctl restart guicang-backend`
+
+### 方式一：Docker 一键启动（轻量，可选）
 
 无需宿主机特权前置，容器内自建隔离管理员账号，开箱即用：
 
