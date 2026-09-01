@@ -3,7 +3,7 @@
 > 新对话开始工作前，请先读本文件，再读 AGENTS.md 与 docs/ 下的文档。
 
 ## 一句话状态
-**手册全部实施步骤（0.4–8.2）已实现并提交推送**：阶段 0–5 功能全完成，阶段 6 部署配置就绪，阶段 7 测试覆盖（后端 80.8% + 前端 11 冒烟/权限测试）+ 文档，阶段 8 upgrade.sh + 压测基线。最近一轮新增小说阅读器（TXT/EPUB 识别 + 章节阅读 + 进度记忆）与 WebDAV 防火墙修复，并补齐 dav/favorite/notification/share/reader 测试（后端 225 测试 / 前端 23 测试全绿）。**正式环境已切换：轻量 Docker 模式（nginx+backend，容器内隔离 admin 账号，只读挂载 /home/wb/nas）正在运行**，演示/开发数据已清理。仍可选做：宿主完整部署（install-helper / dir-permissions / samba-include）、正式压测与 PG 对比。
+**手册全部实施步骤（0.4–8.2）已实现并提交推送**：阶段 0–5 功能全完成，阶段 6 部署配置就绪，阶段 7 测试覆盖（后端 80.8% + 前端 11 冒烟/权限测试）+ 文档，阶段 8 upgrade.sh + 压测基线。最近一轮新增小说阅读器（TXT/EPUB 识别 + 章节阅读 + 进度记忆）与 WebDAV 防火墙修复，并补齐 dav/favorite/notification/share/reader 测试（后端 225 测试 / 前端 23 测试全绿）。**正式环境已部署（2026-09-01）：宿主 systemd 部署**——后端由 systemd 托管（guicang-svc 非 root 身份，开机自启+崩溃自恢复，helper 认证），生产前端由 Nginx 托管于 **8090 端口**（80 保留给 Nextcloud）。Samba 共享（nas-shared/nas-media/personal-admin）已上线。仍可选做：SQLite vs PG 正式对比压测、多设备验收。
 
 ## 项目与目标
 - GuiCang（归藏）家庭 NAS 管理系统。仓库：https://github.com/Isanti2016/GuiCang
@@ -56,13 +56,20 @@
 - 测试补齐：dav（12）/favorite（6）/notification（7+5）/share（12）模块零测试清零；reader 模块 EncodingDetector（8）/Txt（16）/Epub（11）/API（10）；后端全量 225 测试、前端 23 测试全绿
 - 另：修复 EncodingDetector 64KB 探测头截断误判 GB18030（尾部去 1~3 字节重试）；修复 epub 标题提取顺序 bug
 
-## 待用户确认执行（下一步，均不触碰 /home/wb/nas 现有数据）
-1. `sudo ./scripts/install-helper.sh`（建组/服务账号/装 helper/sudoers）——可先 --dry-run
-2. `sudo ./scripts/dir-permissions.sh --apply`（NAS 目录 setgid 权限，先备份快照）
-3. `sudo ./scripts/samba-include.sh --apply`（Samba 共享段，smb.conf 备份 + testparm）
-4. 补建 admin 系统账号（初始化向导已落元数据 pending）
-5. `bash scripts/setup.sh && bash scripts/deploy.sh`（80 端口需先迁 Apache2 至 8081）
-6. 部署后正式压测（SQLite vs PG 对比，见 docs/压测报告.md）
+## 部署执行记录（2026-09-01，已完成）
+1. ✅ `install-helper.sh`（组 nasusers/nasops、服务账号 guicang-svc uid=1003、helper、sudoers 白名单）——helper health 全绿（pam/samba/svc/storage）
+2. ✅ `dir-permissions.sh --apply`（shared/media 顶层 setgid + 快照 /var/backups/guicang-dir-permissions-*.txt）
+3. ✅ `samba-include.sh --apply`（GUICANG_DB=backend/data/guicang.db；nas-shared/nas-media/personal-admin 共享已热加载；smb.conf 已备份）
+4. ✅ admin 系统账号已存在（uid 1002）并绑定归藏；personal/admin 目录已建（0750 admin:nasusers）
+5. ✅ 后端 systemd 化（guicang-backend.service，User=guicang-svc，helper 认证，Restart=always）＋前端 pnpm build → Nginx 托管 8090（80 保留给 Nextcloud，未迁 apache2）
+6. ✅ 部署后压测：静态 8318 req/s、API 直连 973 req/s、经 nginx 587 req/s，0 失败（PG 对比留作后续可选项）
+
+## 运维命令（systemd + Nginx）
+- 后端：`systemctl status|restart|stop guicang-backend`；日志 `journalctl -u guicang-backend -f`（或 backend/data/logs/systemd.*.log）
+- 前端/反代：`systemctl restart nginx`；配置 /etc/nginx/conf.d/guicang.conf（监听 8090）
+- 访问：Web `http://192.168.31.12:8090/`（Tailscale 100.112.98.102:8090）；WebDAV `http://192.168.31.12:8090/dav/`（账号=系统账号+密码）；Samba 共享 nas-shared/nas-media/personal-admin
+- 后端数据目录 backend/data（SQLite）属 guicang-svc:nasops；**改后端代码后需重新 `mvn package` 并 `systemctl restart`**
+- 升级：先 `systemctl stop guicang-backend`，再跑 `scripts/upgrade.sh` 或手动替换 jar
 
 ## 注意事项 / 已知坑
 - 后端 dev 库 backend/data（gitignore）；测试共享内存 SQLite；Flyway 锁定 9.22.3。
