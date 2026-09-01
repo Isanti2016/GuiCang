@@ -74,6 +74,7 @@ install_file() {
     run cp -a "$dst" "$bak"
   fi
   say "安装 $dst (${mode}, ${owner})"
+  run mkdir -p "$(dirname "$dst")"
   run install -o "${owner%%:*}" -g "${owner##*:}" -m "$mode" "$src" "$dst"
 }
 install_file "$HELPER_SRC" "$HELPER_DST" 750 "root:nasops"
